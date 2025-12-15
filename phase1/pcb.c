@@ -4,8 +4,6 @@ static struct list_head pcbFree_h;
 static pcb_t pcbFree_table[MAXPROC];
 static int next_pid = 1;
 
-
-/* ------------------------- PARTE 1 --------------------------------- */
 /*initialize the pcbFree list to contain all the elements of the
 static array of MAXPROC PCBs. This method will be called only once during data
 structure initialization.*/
@@ -64,9 +62,6 @@ pcb_t* allocPcb() {
     return p;
 }
 
-
-
-/* ------------------------- PARTE 2 --------------------------------- */
 void mkEmptyProcQ(struct list_head *head) {
     INIT_LIST_HEAD(head); // function of listx.h to initialize an empty list
 }
@@ -131,9 +126,6 @@ pcb_t *outProcQ(struct list_head *head, pcb_t *p) {
     return NULL; // returns NULL if the element was not in the given list
 }
 
-
-
-/* ------------------------- PARTE 3 --------------------------------- */
 /*
     Return TRUE if the PCB pointed to by p has no children. Return FALSE otherwise.
 */

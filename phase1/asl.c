@@ -8,7 +8,7 @@ static semd_t* getSemd(int* key);
 
 
 /* Initialize the semdFree list to contain all the elements of the array static semd_t semdTable[MAXPROC].
-This method will be only called once during data structure initialization. */
+ * This method will be only called once during data structure initialization. */
 void initASL() {
     INIT_LIST_HEAD(&semdFree_h);
     INIT_LIST_HEAD(&semd_h);
