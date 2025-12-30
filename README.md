@@ -60,9 +60,3 @@ uriscv
 The system will load `p1test.c`. Check the **Terminal 0** window in the emulator.
 * **Success**: Displays "So Long and Thanks for All the Fish" followed by "System Halted".
 * **Failure**: Displays "Kernel Panic".
-
-## Authors
-* Yuri Disalvatore
-* Leonardo Carletti
-* Giacomo Bruno
-* Federico Serra
