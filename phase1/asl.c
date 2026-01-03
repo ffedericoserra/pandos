@@ -6,7 +6,7 @@ static struct list_head semdFree_h;         // List of unused (free) semaphore d
 static struct list_head semd_h;             // Represents the ASL: sorted list of semaphores with one or more processes blocked on them
 
 static semd_t* getSemdByKey(int* key);
-static inline semd_t getSemdFromContainer(struct list_head *head);
+static inline semd_t* getSemdFromContainer(struct list_head *head);
 static inline void freeSemd(semd_t *sem);
 static inline semd_t* allocSemd();
 static inline void initSemd(semd_t *sem, int *key);
