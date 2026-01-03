@@ -80,7 +80,7 @@ pcb_t* removeBlocked(int* semAdd) {
     /* If the queue is now empty, return the semaphore to the free list */
     if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
-        freeSemd(&sem);
+        freeSemd(sem);
     }
 
     return p;
@@ -109,7 +109,7 @@ pcb_t* outBlocked(pcb_t* p) {
     /* If the queue is now empty, return the semaphore to the free list */
     if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
-        freeSemd(&sem);
+        freeSemd(sem);
     }
 
     return p;
