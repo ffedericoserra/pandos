@@ -5,7 +5,11 @@ static semd_t semd_table[MAXPROC];          // Array for semaphores descriptors
 static struct list_head semdFree_h;         // List of unused (free) semaphore descriptors
 static struct list_head semd_h;             // Represents the ASL: sorted list of semaphores with one or more processes blocked on them
 
-static semd_t* getSemd(int* key);
+static inline semd_t* getSemd(int* key);
+static inline void freeSemd(semd_t *sem);
+static semd_t* allocSemd();
+static inline void initSemd(semd_t *sem, int *key);
+
 
 
 /* Initialize the semdFree list to contain all the elements of the array static semd_t semdTable[MAXPROC].
@@ -16,7 +20,7 @@ void initASL() {
 
     /* Add all static sem descriptors to the free list */
     for (int i = 0; i < MAXPROC; i++) {
-        list_add(&semd_table[i].s_link, &semdFree_h);
+        freeSemd(&semd_table[i]);
     }
 }
 
@@ -33,16 +37,10 @@ int insertBlocked(int* semAdd, pcb_t* p) {
 
     /* If semaphore is not active, allocate a new one */
     if (sem == NULL) {
-        if (list_empty(&semdFree_h))    return TRUE;
-        
-        /* Remove from free list */
-        struct list_head *new_node = semdFree_h.next;
-        list_del(new_node);
-        sem = container_of(new_node, semd_t, s_link);
-        
-        /* Initialize new semaphore */
-        sem->s_key = semAdd;
-        mkEmptyProcQ(&sem->s_procq);
+        /* Allocate and initalize a new semaphore if semdFree list is not empty, otherwise return TRUE */
+        sem = allocSemd();
+        if (sem == NULL)        return TRUE;        
+        initSemd(sem, semAdd);
         
         /* Insert into ASL in sorted order (ascending by key) */
         struct list_head *pos;
@@ -77,7 +75,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
 pcb_t* removeBlocked(int* semAdd) {
     semd_t *sem = getSemd(semAdd);
 
-    /* Semaphore not found; also handles safety check to ensure s_procq is not empty */
+    /* Semaphore not found; also handles safety check to ensure s_procq is not empyty */
     if (sem == NULL || emptyProcQ(&sem->s_procq)) {
         return NULL;
     }
@@ -90,7 +88,7 @@ pcb_t* removeBlocked(int* semAdd) {
     /* If the queue is now empty, return the semaphore to the free list */
     if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
-        list_add(&sem->s_link, &semdFree_h);
+        freeSemd(&sem);
     }
 
     return p;
@@ -121,7 +119,7 @@ pcb_t* outBlocked(pcb_t* p) {
     /* If the queue is now empty, return the semaphore to the free list */
     if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
-        list_add(&sem->s_link, &semdFree_h);
+        freeSemd(&sem);
     }
 
     return p;
@@ -162,4 +160,29 @@ static inline semd_t* getSemd(int* key) {
     }
 
     return NULL;
+}
+
+/* Insert a semaphore descriptor in the free list */
+static inline void freeSemd(semd_t *sem) {
+    list_add(&sem->s_link, &semdFree_h);
+}
+
+/* Allocate a semaphore descriptor from the free list.
+ * If semdFree list is not empty return a pointer to the allocated semaphore, else return NULL.
+ */
+static semd_t* allocSemd() {
+    if (list_empty(&semdFree_h)) {
+        return NULL;
+    }
+
+    struct list_head *new_node = semdFree_h.next;
+    list_del(new_node);
+
+    return container_of(new_node, semd_t, s_link);
+}
+
+/* Initialize a semaphore descriptor values with selected key */
+static inline void initSemd(semd_t *sem, int *key) {
+    sem->s_key = key;
+    mkEmptyProcQ(&sem->s_procq);
 }
