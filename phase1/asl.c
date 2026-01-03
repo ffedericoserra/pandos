@@ -25,14 +25,8 @@ void initASL() {
     }
 }
 
-/* Insert the PCB pointed to by p at the tail of the process queue associated with the semaphore
- * whose key is semAdd and set the semaphore address of p to semaphore with semAdd. If the
- * semaphore is currently not active (i.e. there is no descriptor for it in the ASL), allocate a new
- * descriptor from the semdFree list, insert it in the ASL (at the appropriate position), initialize
- * all of the fields (i.e. set s_key to semAdd, and s_procq to mkEmptyProcQ()), and proceed as
- * above. If a new semaphore descriptor needs to be allocated and the semdFree list is empty,
- * return TRUE. In all other cases return FALSE.
- */
+/* Insert the PCB pointed to by p at the tail of the process queue associated with the semaphore whose key is semAdd.
+ * Return TRUE if a new semaphore descriptor needs to be allocated and the semdFree list is empty, otherwise FALSE. */
 int insertBlocked(int* semAdd, pcb_t* p) {
     semd_t *sem = getSemdByKey(semAdd);
 
@@ -68,11 +62,8 @@ int insertBlocked(int* semAdd, pcb_t* p) {
     return FALSE;
 }
 
-/* Search the ASL for a descriptor of this semaphore. If none is found, return NULL; otherwise,
- * remove the first (i.e. head) PCB from the process queue of the found semaphore descriptor and 
- * return a pointer to it. If the process queue for this semaphore becomes empty (emptyProcQ(s_procq) 
- * is TRUE), remove the semaphore descriptor from the ASL and return it to the semdFree list.
- */
+/* Search the ASL for a descriptor of this semaphore and remove the first PCB from the process queue.
+ * Return a pointer to the removed PCB, or NULL if none is found. */
 pcb_t* removeBlocked(int* semAdd) {
     semd_t *sem = getSemdByKey(semAdd);
 
@@ -95,10 +86,8 @@ pcb_t* removeBlocked(int* semAdd) {
     return p;
 }
 
-/* Remove the PCB pointed to by p from the process queue associated with p’s semaphore (p->p_semAdd)
- * on the ASL. If PCB pointed to by p does not appear in the process queue associated with p’s
- * semaphore, which is an error condition, return NULL; otherwise, return p.
- */
+/* Remove the PCB pointed to by p from the process queue associated with p's semaphore on the ASL.
+ * Return a pointer to the removed PCB, or NULL if not found. */
 pcb_t* outBlocked(pcb_t* p) {
     /* Error condition: p is not blocked on any semaphore */
     if (p->p_semAdd == NULL) {
@@ -126,10 +115,8 @@ pcb_t* outBlocked(pcb_t* p) {
     return p;
 }
 
-/* Return a pointer to the PCB that is at the head of the process queue associated with the
- * semaphore semAdd. Return NULL if semAdd is not found on the ASL or if the process queue
- * associated with semAdd is empty.
- */
+/* Return a pointer to the PCB that is at the head of the process queue associated with the semaphore semAdd.
+ * Return a pointer to the head PCB, or NULL if not found. */
 pcb_t* headBlocked(int* semAdd) {
     semd_t *sem = getSemdByKey(semAdd);
 
@@ -144,14 +131,14 @@ pcb_t* headBlocked(int* semAdd) {
 
 /* ------------------------ HELPERS ------------------------ */
 
-/* Return a semaphore from its list_head container */
+/* Return a semaphore from its list_head container.
+ * Return the semd_t structure. */
 static inline semd_t getSemdFromContainer(struct list_head *head) {
     return container_of(head, semd_t, s_link);
 }
 
 /* Search for a semaphore descriptor in the ASL by its key.
- * If found return a pointer to the semaphore, else return NULL.
- */
+ * Return a pointer to the semaphore, or NULL if not found. */
 static inline semd_t* getSemdByKey(int* key) {
     struct list_head *currentListElem;
     list_for_each(currentListElem, &semd_h) {
@@ -169,14 +156,13 @@ static inline semd_t* getSemdByKey(int* key) {
     return NULL;
 }
 
-/* Insert a semaphore descriptor in the free list */
+/* Insert a semaphore descriptor in the free list. */
 static inline void freeSemd(semd_t *sem) {
     list_add(&sem->s_link, &semdFree_h);
 }
 
 /* Allocate a semaphore descriptor from the free list.
- * If semdFree list is not empty return a pointer to the allocated semaphore, else return NULL.
- */
+ * Return a pointer to the allocated semaphore, or NULL if the free list is empty. */
 static semd_t* allocSemd() {
     if (list_empty(&semdFree_h)) {
         return NULL;
@@ -188,7 +174,7 @@ static semd_t* allocSemd() {
     return container_of(new_node, semd_t, s_link);
 }
 
-/* Initialize a semaphore descriptor values with selected key */
+/* Initialize a semaphore descriptor values with selected key. */
 static inline void initSemd(semd_t *sem, int *key) {
     sem->s_key = key;
     mkEmptyProcQ(&sem->s_procq);
