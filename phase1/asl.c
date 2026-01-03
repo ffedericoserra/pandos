@@ -5,7 +5,8 @@ static semd_t semd_table[MAXPROC];          // Array for semaphores descriptors
 static struct list_head semdFree_h;         // List of unused (free) semaphore descriptors
 static struct list_head semd_h;             // Represents the ASL: sorted list of semaphores with one or more processes blocked on them
 
-static inline semd_t* getSemd(int* key);
+static inline semd_t* getSemdByKey(int* key);
+static inline semd_t getSemdFromContainer(struct list_head *head);
 static inline void freeSemd(semd_t *sem);
 static semd_t* allocSemd();
 static inline void initSemd(semd_t *sem, int *key);
@@ -33,7 +34,7 @@ void initASL() {
  * return TRUE. In all other cases return FALSE.
  */
 int insertBlocked(int* semAdd, pcb_t* p) {
-    semd_t *sem = getSemd(semAdd);
+    semd_t *sem = getSemdByKey(semAdd);
 
     /* If semaphore is not active, allocate a new one */
     if (sem == NULL) {
@@ -43,18 +44,18 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         initSemd(sem, semAdd);
         
         /* Insert into ASL in sorted order (ascending by key) */
-        struct list_head *pos;
+        struct list_head *currentListElem;
         int inserted = 0;
-        list_for_each(pos, &semd_h) {
-            semd_t *entry = container_of(pos, semd_t, s_link);
+        list_for_each(currentListElem, &semd_h) {
+            semd_t *entry = getSemdFromContainer(currentListElem);
             if (entry->s_key > semAdd) {
                 /* Insert before the current larger element */
-                __list_add(&sem->s_link, pos->prev, pos);
+                __list_add(&sem->s_link, currentListElem->prev, currentListElem);
                 inserted = 1;
                 break;
             }
         }
-        /* If not inserted yet (list empty or largest key), add to tail */
+        /* If not inserted yet (list empty or largest key), add to Semd list tail */
         if (!inserted) {
             list_add_tail(&sem->s_link, &semd_h);
         }
@@ -73,7 +74,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
  * is TRUE), remove the semaphore descriptor from the ASL and return it to the semdFree list.
  */
 pcb_t* removeBlocked(int* semAdd) {
-    semd_t *sem = getSemd(semAdd);
+    semd_t *sem = getSemdByKey(semAdd);
 
     /* Semaphore not found; also handles safety check to ensure s_procq is not empyty */
     if (sem == NULL || emptyProcQ(&sem->s_procq)) {
@@ -104,7 +105,7 @@ pcb_t* outBlocked(pcb_t* p) {
         return NULL;
     }
 
-    semd_t *sem = getSemd(p->p_semAdd);
+    semd_t *sem = getSemdByKey(p->p_semAdd);
 
     /* Error condition: semaphore descriptor not found */
     if (sem == NULL) {
@@ -130,7 +131,7 @@ pcb_t* outBlocked(pcb_t* p) {
  * associated with semAdd is empty.
  */
 pcb_t* headBlocked(int* semAdd) {
-    semd_t *sem = getSemd(semAdd);
+    semd_t *sem = getSemdByKey(semAdd);
 
     if (sem == NULL || emptyProcQ(&sem->s_procq)) {
         return NULL;
@@ -143,13 +144,19 @@ pcb_t* headBlocked(int* semAdd) {
 
 /* ------------------------ HELPERS ------------------------ */
 
+/* Return a semaphore from its list_head container */
+static inline semd_t getSemdFromContainer(struct list_head *head) {
+    return container_of(head, semd_t, s_link);
+}
+
 /* Search for a semaphore descriptor in the ASL by its key.
  * If found return a pointer to the semaphore, else return NULL.
  */
-static inline semd_t* getSemd(int* key) {
-    struct list_head *pos;
-    list_for_each(pos, &semd_h) {
-        semd_t *entry = container_of(pos, semd_t, s_link);
+static inline semd_t* getSemdByKey(int* key) {
+    struct list_head *currentListElem;
+    list_for_each(currentListElem, &semd_h) {
+        semd_t *entry = getSemdFromContainer(currentListElem);
+
         if (entry->s_key == key) {
             return entry;
         }
