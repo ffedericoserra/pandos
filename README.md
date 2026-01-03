@@ -4,7 +4,7 @@ PandOSsh is an educational multiprocessor operating system designed for the µRI
 
 The implementation presented in this repository is part of the Operating Systems course project held at the **University of Bologna** for the academic year 2025/2026. Full details can be found at the [official course page](https://www.cs.unibo.it/~renzo/so/progetto.shtml), under the Progetto section.
 
-This repository currently contains the implementation of one of the three phases which will be implemented: **Phase 1: The Queue Managers**, which handles Process Control Blocks (PCBs) and the Active Semaphore List (ASL).
+This repository currently contains the implementation of one of the three phases which will be implemented: **Phase 1 - The Queue Managers**, which handles Process Control Blocks (PCBs) and the Active Semaphore List (ASL). [`PandOSSh_Doc.pdf`](PandOSSh_Doc.pdf) contains the full documentation.
 
 ## Authors
 * Yuri Disalvatore
