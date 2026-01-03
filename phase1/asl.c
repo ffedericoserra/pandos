@@ -1,4 +1,5 @@
 #include "./headers/asl.h"
+#include "./headers/pcb.h"
 
 static semd_t semd_table[MAXPROC];          // Array for semaphores descriptors
 static struct list_head semdFree_h;         // List of unused (free) semaphore descriptors
@@ -41,7 +42,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
         
         /* Initialize new semaphore */
         sem->s_key = semAdd;
-        INIT_LIST_HEAD(&sem->s_procq);
+        mkEmptyProcQ(&sem->s_procq);
         
         /* Insert into ASL in sorted order (ascending by key) */
         struct list_head *pos;
@@ -76,25 +77,18 @@ int insertBlocked(int* semAdd, pcb_t* p) {
 pcb_t* removeBlocked(int* semAdd) {
     semd_t *sem = getSemd(semAdd);
 
-    /* Semaphore not found */
-    if (sem == NULL) {
-        return NULL;
-    }
-
-    /* Safety check: queue shouldn't be empty if sem exists in ASL, but good to check */
-    if (list_empty(&sem->s_procq)) {
+    /* Semaphore not found; also handles safety check to ensure s_procq is not empty */
+    if (sem == NULL || emptyProcQ(&sem->s_procq)) {
         return NULL;
     }
 
     /* Remove the first PCB from the queue */
-    struct list_head *first = sem->s_procq.next;
-    pcb_t *p = container_of(first, pcb_t, p_list);
-    list_del(first);
+    pcb_t *p = removeProcQ(&sem->s_procq);
     
     p->p_semAdd = NULL;
 
     /* If the queue is now empty, return the semaphore to the free list */
-    if (list_empty(&sem->s_procq)) {
+    if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
         list_add(&sem->s_link, &semdFree_h);
     }
@@ -125,7 +119,7 @@ pcb_t* outBlocked(pcb_t* p) {
     p->p_semAdd = NULL;
 
     /* If the queue is now empty, return the semaphore to the free list */
-    if (list_empty(&sem->s_procq)) {
+    if (emptyProcQ(&sem->s_procq)) {
         list_del(&sem->s_link);
         list_add(&sem->s_link, &semdFree_h);
     }
@@ -140,12 +134,12 @@ pcb_t* outBlocked(pcb_t* p) {
 pcb_t* headBlocked(int* semAdd) {
     semd_t *sem = getSemd(semAdd);
 
-    if (sem == NULL || list_empty(&sem->s_procq)) {
+    if (sem == NULL || emptyProcQ(&sem->s_procq)) {
         return NULL;
     }
 
     /* Return the first PCB without removing it */
-    return container_of(sem->s_procq.next, pcb_t, p_list);
+    return headProcQ(&sem->s_procq);
 }
 
 
@@ -154,7 +148,7 @@ pcb_t* headBlocked(int* semAdd) {
 /* Search for a semaphore descriptor in the ASL by its key.
  * If found return a pointer to the semaphore, else return NULL.
  */
-static semd_t* getSemd(int* key) {
+static inline semd_t* getSemd(int* key) {
     struct list_head *pos;
     list_for_each(pos, &semd_h) {
         semd_t *entry = container_of(pos, semd_t, s_link);
