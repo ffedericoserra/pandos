@@ -5,10 +5,10 @@ static semd_t semd_table[MAXPROC];          // Array for semaphores descriptors
 static struct list_head semdFree_h;         // List of unused (free) semaphore descriptors
 static struct list_head semd_h;             // Represents the ASL: sorted list of semaphores with one or more processes blocked on them
 
-static inline semd_t* getSemdByKey(int* key);
+static semd_t* getSemdByKey(int* key);
 static inline semd_t getSemdFromContainer(struct list_head *head);
 static inline void freeSemd(semd_t *sem);
-static semd_t* allocSemd();
+static inline semd_t* allocSemd();
 static inline void initSemd(semd_t *sem, int *key);
 
 
@@ -131,15 +131,14 @@ pcb_t* headBlocked(int* semAdd) {
 
 /* ------------------------ HELPERS ------------------------ */
 
-/* Return a semaphore from its list_head container.
- * Return the semd_t structure. */
-static inline semd_t getSemdFromContainer(struct list_head *head) {
+/* Return a semaphore from its list_head container */
+static inline semd_t* getSemdFromContainer(struct list_head *head) {
     return container_of(head, semd_t, s_link);
 }
 
 /* Search for a semaphore descriptor in the ASL by its key.
  * Return a pointer to the semaphore, or NULL if not found. */
-static inline semd_t* getSemdByKey(int* key) {
+static semd_t* getSemdByKey(int* key) {
     struct list_head *currentListElem;
     list_for_each(currentListElem, &semd_h) {
         semd_t *entry = getSemdFromContainer(currentListElem);
@@ -163,7 +162,7 @@ static inline void freeSemd(semd_t *sem) {
 
 /* Allocate a semaphore descriptor from the free list.
  * Return a pointer to the allocated semaphore, or NULL if the free list is empty. */
-static semd_t* allocSemd() {
+static inline semd_t* allocSemd() {
     if (list_empty(&semdFree_h)) {
         return NULL;
     }
