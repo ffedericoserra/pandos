@@ -9,10 +9,10 @@ static array of MAXPROC PCBs. This method will be called only once during data
 structure initialization.*/
 void initPcbs() {
 
-    //Inizializzo la lista pcbFree_h vuota.
+    //Initialize the empty pcbFree_h list.
     INIT_LIST_HEAD(&pcbFree_h);
 
-    //Inserisco in coda alla lista gli elementi di pcbfree_table[].
+    //Insert the elements of pcbfree_table[] at the end of the list.
     for(int i=0; i<MAXPROC; i++){
         list_add_tail(&pcbFree_table[i].p_list, &pcbFree_h);
     }
@@ -21,7 +21,7 @@ void initPcbs() {
 //insert the element pointed to by p onto the pcbFree list
 void freePcb(pcb_t* p) {
 
-    //Inserisco l'elemento in coda alla lista.
+    //Insert the element at the end of the list.
     list_add_tail(&p->p_list, &pcbFree_h);
 }
 
@@ -31,24 +31,24 @@ PCBs fields and then return a pointer to the removed element. PCBs get reused,
 so it is important that no previous value persist in a PCB when it gets reallocated. */
 pcb_t* allocPcb() {
 
-    //Controlla se la lista è vuota, se sì, ritorna NULL.
+    //Checks if the list is empty, if so, returns NULL.
     if(list_empty(&pcbFree_h)){
         return NULL;
     }
 
-    //Con un puntatore al primo nodo della lista, elimino il nodo usando list_del().
+    //Delete the node from the list with a pointer to the first node using list_del()
     struct list_head *headNext = pcbFree_h.next;
     list_del(headNext);
 
-    //Container_of ottiene il puntatore al PCB che contiene il campo p_list.
+    //Container_of gets the pointer to the PCB containing the p_list field.
     pcb_t *p = container_of(headNext, pcb_t, p_list);
 
-    //Inizializzo i valori dei PCB, per farlo: 
-    //Azzero il padre e il tempo, 
-    //inizializzo la lista dei figli e dei fratelli,
-    //tolgo il riferimento al semaforo e al supporto e azzero la priorità,
-    //assegno un nuovo PID incrementando il contatore globale next_pid.
-    //Azzero il nodo list_head.
+    //Initialize the PCB fields: 
+    //reset the parent and the time, 
+    //initialize the list of children and siblings,
+    //remove the reference to the semaphore and the support structure and reset the priority,
+    //assign a new PID by incrementing the global counter next_pid.
+    //reset the list_head node.
     p->p_parent=NULL;
     INIT_LIST_HEAD(&p->p_child);
     INIT_LIST_HEAD(&p->p_sib);
