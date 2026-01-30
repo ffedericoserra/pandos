@@ -44,7 +44,7 @@ int insertBlocked(int* semAdd, pcb_t* p) {
             semd_t *entry = getSemdFromContainer(currentListElem);
             if (entry->s_key > semAdd) {
                 /* Insert before the current larger element */
-                list_add(&sem->s_link, currentListElem->prev;
+                list_add(&sem->s_link, currentListElem->prev);
                 inserted = 1;
                 break;
             }
