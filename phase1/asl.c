@@ -1,3 +1,5 @@
+/* Active Semaphore List (ASL) data structure implementation */
+
 #include "./headers/asl.h"
 #include "./headers/pcb.h"
 
