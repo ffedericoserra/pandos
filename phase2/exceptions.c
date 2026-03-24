@@ -108,45 +108,62 @@ void ExceptionHandler() {
 
 
 /*
-Handles system calls issued by processes.
-The syscall number is stored in register a0.
-Arguments are passed in the remaining registers.
-If the syscall is invoked in user mode, it is treated as a program trap.
+ * SYSCALL exception handler.
+ * Dispatches system calls based on the value in register a0.
+ *
+ * - Negative a0 in user mode → PRIVINSTR program trap
+ * - Negative a0 in kernel mode → Nucleus SYSCALL (NSYS1-10)
+ * - Non-negative a0 → Pass Up or Die (support level SYSCALL)
  */
-void SyscallExceptionHandler(){
-    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(GENERALEXCEPT);
-
-    if ((exceptionState->status & MSTATUS_MPP_MASK) == MSTATUS_MPP_U){
-        ProgramTrapHandler();
+void SyscallExceptionHandler() {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+    int syscallNumber = exceptionState->reg_a0;
+    
+    /* User-mode check for privileged (negative) syscalls */
+    if ((exceptionState->status & MSTATUS_MPP_MASK) == MSTATUS_MPP_U) {
+        if (syscallNumber < 0) { /* Privileged syscall from user mode -> simulate PRIVINSTR trap */
+            exceptionState->cause = PRIVINSTR;
+            programTrapHandler();
+            return;
+        }
+        /* Positive syscall from user mode -> pass up (no PC increment) */
+        passUpOrDie(GENERALEXCEPT);
         return;
     }
 
-    //nota per il gruppo: scheduler se è richiamato dentro le funzioni richiamate nel switch si può togliere qui
-    exceptionState->pc += WORDLEN;
+    /* Kernel mode: positive or zero syscall -> pass up (no PC increment) */
+    if (syscallNumber >= 0) {
+        passUpOrDie(GENERALEXCEPT);
+        return;
+    }
 
-    int syscallNumber = exceptionState->reg_a0;
+    /* Negative syscall in kernel mode → handle at Nucleus level.
+     * Increment PC by WORDLEN to avoid infinite SYSCALL loop. */
+    exceptionState->pc_epc += WORDLEN;
 
-    // Dispatch the syscall based on its identifier
-    switch(syscallNumber){
+    unsigned int arg1 = exceptionState->reg_a1;
+    unsigned int arg2 = exceptionState->reg_a2;
+    unsigned int arg3 = exceptionState->reg_a3;
 
+    switch (syscallNumber) {
         case CREATEPROCESS:
-            createProcess();
+            createProcess((state_t *)arg1, (int)arg2, (support_t *)arg3);
             break;
 
         case TERMPROCESS:
-            terminateProcess();
+            terminateProcess((int)arg1);
             break;
 
         case PASSEREN:
-            passeren();
+            passeren((int *)arg1);
             break;
 
         case VERHOGEN:
-            verhogen();
+            verhogen((int *)arg1);
             break;
 
         case DOIO:
-            doIO();
+            doIO((int *)arg1, (int)arg2);
             break;
 
         case GETTIME:
@@ -154,15 +171,15 @@ void SyscallExceptionHandler(){
             break;
 
         case CLOCKWAIT:
-            waitClock();
+            waitForClock();
             break;
 
         case GETSUPPORTPTR:
-            getSupportPtr();
+            getSupportData();
             break;
 
         case GETPROCESSID:
-            getProcessID();
+            getProcessID((int)arg1);
             break;
 
         case YIELD:
@@ -170,6 +187,8 @@ void SyscallExceptionHandler(){
             break;
 
         default:
-            ProgramTrapHandler();
+            /* Non-existent Nucleus service -> Program Trap */
+            programTrapHandler();
+            break;
     }
 }
