@@ -10,6 +10,7 @@ struct list_head readyQueue;
 pcb_t* currentProcess;
 int deviceSemaphores[SEMDEVLEN];
 
+cpu_t startTOD;     // AGGIUNTA FEDE
 
 
 int main(){

@@ -36,6 +36,9 @@ void scheduler(){
         /* Rimuovi il primo processo pronto e impostalo come processo corrente */
         currentProcess = removeProcQ(&readyQueue);
         
+        /* Record start time for CPU time accounting */
+        STCK(startTOD);     // AGGIUNTA FEDE
+
         /* Carica il PLT con il time slice (5 millisecondi) */
         setTIMER(TIMESLICE);
         
@@ -43,7 +46,4 @@ void scheduler(){
         LDST(&(currentProcess->p_s));
 
     }
-
-
 }
-

@@ -1,156 +1,356 @@
 /* SYSCALL exception handling */
 
-/* 
-  ACCESS TO REGISTERS:
-    #define reg_a0 gpr[24]
-    #define reg_a1 gpr[25]
-    #define reg_a2 gpr[26]
-    #define reg_a3 gpr[27]
-    #define reg_a4 gpr[28]
-*/
-
-#include <uriscv/types.h>
+#include <uriscv/liburiscv.h>
 #include "../headers/types.h"
 #include "../headers/const.h"
-// #include "../headers/listx.h"
-
-#include "../phase1/headers/asl.h"
+#include "../headers/listx.h"
 #include "../phase1/headers/pcb.h"
+#include "../phase1/headers/asl.h"
+#include "./headers/scheduler.h"
+#include "./headers/syscall.h"
 
-static void terminateCurrentAndChild(pcb_t *proc);
+/* Pseudo-clock semaphore index */
+#define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)
 
-/** 
-  * When requested, this service causes a new process, said to be a progeny of the caller, to be created.
-  * a1 should contain a pointer to a processor state (state_t *). This processor state is to be used as
-  * 1The CAUSE_IS_INT macro checks if the most significant bit of the parameter is 1, if the most significant bit of the
-  * cause register is 1 it means that the exception was caused by an interrupt.
-  * 5
-  * the initial state for the newly created process. The process requesting the NSYS1 service continues
-  * to exist and to execute. If the new process cannot be created due to lack of resources (e.g. no more
-  * free PCBs), an error code of -1 is placed/returned in the caller’s a0, otherwise, return the process id
-  * of the newly created process in the caller’s a0. Good design calls for tight/strong cohesion and loose
-  * coupling between modules/classes/OS Levels, etc. Level 2 implements PCBs, and Level 3 utilizes
-  * queues of PCBs to create a basic multiprogramming environment. However, it is the Support Level
-  * that handles address translation as well as all exceptions beyond I/O interrupts and the first eight
-  * system calls (and then, only if in kernel-mode). The design question then is how to provide Support
-  * Level access to PCB fields that will only be used in the Support Level. The standard approach, at
-  * least in systems-level programming such as an OS, is to define a structure containing the additional
-  * Support Level fields (support_t) and then add a pointer (support_t *) to the PCB. The Support
-  * Level code needing access to these fields will execute a NSYS8 [Section 6.8] which returns a pointer
-  * to the Current Process’s support_t structure. This provides Support Level access to relevant PCB
-  * fields while hiding the Level 3 (and Level 2) PCB fields. The NSYS1 service is requested by the calling
-  * process by placing the value -1 in a0, a pointer to a processor state in a1, a process priority value in
-  * a2, (optionally) a pointer to a Support Structure in a3, and then executing the SYSCALL instruction.
-  * The following C code can be used to request a NSYS1:
-  * int retValue = SYSCALL(CREATEPROCESS, state_t *statep, int prio, support_t *supportp);
-  * Where the mnemonic constant CREATEPROCESS has the value of -1.
-  * The newly populated PCB is placed on the Ready Queue and is made a child of the Current
-  * Process. Process Count is incremented by one, and control is returned to the Current Process.
-*/
-void createProcess(state_t *statep, int prio, support_t *supportp) {           // HOW TO CALL IN HANDLER: createProcess(current_proc->p_s->reg_a1, current_proc->p_s->reg_a2, current_proc->p_s->reg_a3)
-    pcb_t* new_proc;
-    new_proc = allocPcb();      // allocPcb() handles required setup of pid (incrementally), time (0), semadd (NULL)
+/* Helper functions declarations */
+static void terminateRecursive(pcb_t *proc);
+static pcb_t *findProcessByPid(pcb_t *root, int pid);
+static void updateCurrentProcessState();
 
-    if (new_proc == NULL) {
-        currentProcess->p_s->reg_a0 = -1;        // TODO: to verify that access to register is done like this; it must refer to the process blocked at the time of the excecption (the caller)
+
+/*
+ * NSYS1 - CreateProcess
+ * Creates a new process as a child of the current process.
+ * Returns new PID in caller's a0, or -1 on failure.
+ */
+void createProcess(state_t *statep, int prio, support_t *supportp) {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+    
+    pcb_t* newProc = allocPcb();
+    if (newProc == NULL) {
+        exceptionState->reg_a0 = -1;
+        LDST(exceptionState);
         return;
     }
 
-    new_proc->p_s = statep;                     // from reg a1 (statep)
-    new_proc->p_supportStruct = supportp;	    // from reg a3 (supportp), or NULL if not provided
-    new_proc->p_prio = prio;                    // TODO: priority to be set here manually?
-    insertChild(currentProcess, new_proc);      
-    insertProcQ(readyQueue, new_proc);          
+    /* Init new process */
+    copyState(&newProc->p_s, statep);
+    newProc->p_prio = prio;
+    newProc->p_supportStruct = supportp;
+
+    /* Make it a child of current process */
+    insertChild(currentProcess, newProc);
+
+    /* Place it on readyQueue */
+    insertProcQ(readyQueue, newProc);
     processCount++;
 
-    currentProcess->p_s->reg_a0 = new_proc->p_pid;        // TODO: verify if access to reg_a0 correct (should be proc at time of excpection)
+    /* Return the new PID to the caller */
+    exceptionState->reg_a0 = newProc->p_pid;
+    LDST(exceptionState);
 }
 
-/** 
-  * This services causes the executing process or another process to cease to exist. In addition, recursively,
-  * all progeny of that process are terminated as well. Execution of this instruction does not complete
-  * until all progeny are terminated, after which the Scheduler should be called. The NSYS2 service is
-  * requested by the calling process by placing the value -2 in a0 and then executing the SYSCALL
-  * instruction.
-  * The following C code can be used to request a NSYS2:
-  * SYSCALL(TERMINATEPROCESS, int pid, 0, 0);
-  * Where the mnemonic constant TERMINATEPROCESS has the value of -2.
-  * This service terminates the calling process if PID is zero, the process whose identifier is PID
-  * otherwise.
-  */
-void terminateProcess(int pid) {     // (NSYS2) 
-    pcb_t proc_to_terminate = xxx;    // TODO: Get process by pid or caller if pid = 0
-    terminateCurrentAndChild(proc_to_terminate);
-
-    schedule();
-}
-
-/**
-  * 6.3 Passeren (P) (NSYS3)
-  * This service requests the Nucleus to perform a P operation on a semaphore. The P or NSYS3 service is
-  * requested by the calling process by placing the value -3 in a0, the physical address of the semaphore
-  * to be P’ed in a1, and then executing the SYSCALL instruction. Depending on the value of the
-  * semaphore, the value of the semaphore is decreased and control is returned to the Current Process,
-  * or this process is blocked on the ASL (transitions from “running” to “blocked”) and the Scheduler is
-  * called.
-  * The following C code can be used to request a NSYS3:
-  * SYSCALL(PASSEREN, int *semaddr, 0, 0);
-  * Where the mnemonic constant PASSEREN has the value of -3.
-  */
-void passeren(int *semaddr) {                  // (NSYS3)
-    if (*semaddr > 0) {
-        *(semaddr--);
+/*
+ * NSYS2 - TerminateProcess
+ * Terminates the current process (if pid==0) or the process with the given PID.
+ * Recursively terminates all progeny. Calls the scheduler afterwards.
+ */
+void terminateProcess(int pid) {     // (NSYS2)
+    /* Select target process by pid */
+    pcb_t *target;
+    if (pid == 0) {
+        target = currentProcess;
     } else {
-        currentProcess->p_s = *GET_EXCEPTION_STATE_PTR();
+        pcb_t *root = currentProcess;
+        while (root->p_parent != NULL) {
+            root = root->p_parent;              // ?? c'è modo per arrivare a processo root senza questo meccanismo?
+        }
+        target = findProcessByPid(root, pid);
+
+        /* Process not found, return to caller */
+        if (target == NULL) {
+            state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+            LDST(exceptionState);
+            return;
+        }
+    }
+
+    /* Check if the current process is the target or a descendant of the target.
+     * If so, we need to call the scheduler after termination. */
+    int currentDies = (target == currentProcess);
+    if (!currentDies) {
+        pcb_t *ancestor = currentProcess->parent;
+        while (ancestor != NULL) {
+            if (ancestor == target) {
+                currentDies = 1;
+                break
+            }
+            ancestor = ancestor->parent;
+        }
+    }
+
+    /* Update CPU time if current process is being terminated */
+    if (currentDies) {
+        cpu_t currentTOD;
+        STCK(currentTOD);
+        currentProcess->p_time += (currentTOD - startTOD);
+    }
+
+    /* Remove target from parent's children list */
+    outChild(target);
+
+    terminateRecursive(target);
+
+    if (currentDies) {
+        currentProcess = NULL;
+        scheduler();
+    } else { /* current process surivives, return to the caller */
+        state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+        LDST(exceptionState);
+    }
+}
+
+/*
+ * NSYS3 - Passeren (P operation)
+ * Decrements the semaphore. If the result is < 0, the process is blocked.
+ */
+void passeren(int *semaddr) {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+
+    *(semaddr--);
+
+    if (*semaddr < 0) { /* Block the current process on this semaphore */
+        updateCurrentProcessState();
         insertBlocked(semaddr, currentProcess);
         currentProcess = NULL;
-        schedule();
+        scheduler();
+    } else { /* return to caller */
+        LDST(exceptionState);
     }
 }                    
 
-/** 
-  * This service requests the Nucleus to perform a V operation on a semaphore. The V or NSYS4 service
-  * is requested by the calling process by placing the value -4 in a0, the physical address of the semaphore
-  * to be V’ed in a1, and then executing the SYSCALL instruction. The V operation is non blocking,
-  * depending on the value of the semaphore, control is either returned to the Current Process, or the
-  * semaphore value is increased.
-  * The following C code can be used to request a NSYS4:
-  * SYSCALL(VERHOGEN, int *semaddr, 0, 0);
-  * Where the mnemonic constant VERHOGEN has the value of -4.
-  */
-void verhogen(int *semaddr) {                  // (NSYS4)
+/*
+ * NSYS4 - Verhogen (V operation)
+ * Increments the semaphore. If there's a blocked process, unblock it.
+ */
+void verhogen(int *semaddr) {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+
     (*semaddr)++;
 
-    
+    if (*semaddr <= 0) { /* Unblock process (aka: insert it in readyQueue) */
+        pcb_t *unblocked = removeBlocked(semaddr);
+        if (unblocked != NULL) {
+            insertProcQ(&readyQueue, unblocked);
+        }
+    }
+
+    LDST(exceptionState);
 } 
 
-void doIO() {                // (NSYS5)
-    return;
+/*
+ * NSYS5 - DoIO
+ * Initiates an I/O operation and blocks the current process.
+ * commandAddr points to the device's command register.
+ * commandValue is the command to write.
+ */
+void doIO(int *commandAddr, int commandValue) {
+    /* Determine which device semaphore corresponds to this command address.
+     * Device registers start at START_DEVREG (0x10000054).
+     * Each device register is 0x10 bytes.
+     * Lines 3-7 have 8 devices each, with 0x80 bytes per line.
+     *
+     * For non-terminal devices, the command field is at offset 0x04.
+     * For terminal devices:
+     *   recv_command is at offset 0x04
+     *   transm_command is at offset 0x0C
+     */
+    memaddr cmdAddr = (memaddr)commandAddr;
+
+    /* Calculate the device register base address from the command address.
+     * Non-terminal: command at base + 0x04, so base = cmdAddr - 0x04
+     * Terminal recv_command:   base + 0x04, so base = cmdAddr - 0x04
+     * Terminal transm_command: base + 0x0C, so base = cmdAddr - 0x0C
+     */
+    unsigned int offset = cmdAddr - START_DEVREG;
+    int intLineNo = offset / 0x80 + 3;      /* Interrupt lines 3-7 */
+    int devNo = (offset % 0x80) / 0x10;     /* Device number 0-7 */
+
+    int semIndex;
+    if (intLineNo == 7) {
+        /* Determine transmit vs receive from offset */
+        unsigned int withinDev = offset % 0x10;
+        if (withinDev == 0x0C) {
+            /* transm_command */
+            semIndex = (4 * DEVPERINT) + devNo;                 /* 32 + devNo */
+        } else {
+            /* recv_command */
+            semIndex = (4 * DEVPERINT) + devNo + DEVPERINT;     /* 40 + devNo */
+        }
+    } else {
+        semIndex = (intLineNo - 3) * DEVPERINT + devNo;
+    }
+
+    /* Block current process */
+    updateCurrentProcessState();
+
+    /* P on device semaphore */
+    deviceSemaphores[semIndex]--;           // TODO: passeren(deviceSemaphores[semIndex]);
+    insertBlocked(&deviceSemaphores[semIndex], currentProcess);
+    softBlockCount++;
+
+    /* Initiate I/O by writing the command to the device register */
+    *commandAddr = commandValue;
+
+    currentProcess = NULL;
+    scheduler();
 } 
 
-float getCPUTime() {          // (NSYS6)
-    return;
+/*
+ * NSYS6 - GetCPUTime
+ * Returns accumulated CPU time (in microseconds) for the current process.
+ */
+float getCPUTime() {
+   state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+
+   cpu_t currentTOD;
+   STCK(currentTOD);
+
+   /* Return total time: accumulated + time in current quantum */
+   exceptionState->reg_a0 = currentProcess->p_time + (currentTOD - startTOD);
+   LDST(exceptionState);
 } 
 
-void waitForClock() {        // (NSYS7)     // TODO: waitClock su altro file
-    return;
+/*
+ * NSYS7 - WaitForClock
+ * Blocks the current process on the pseudo-clock semaphore.
+ */
+void waitForClock() {
+    /* P on pseudo-clock semaphore */
+    updateCurrentProcessState();
+    deviceSemaphores[PSEUDOCLOCK_SEM]--;            // TODO: passeren(deviceSemaphores[PSEUDOCLOCK_SEM]);
+    insertBlocked(&deviceSemaphores[PSEUDOCLOCK_SEM], currentProcess);
+
+    currentProcess = NULL;
+    scheduler();
 } 
 
-void getSupportData() {      // (NSYS8)
-    return;
+/*
+ * NSYS8 - GetSupportData
+ * Returns a pointer to the current process's support structure.
+ */
+void getSupportData() {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+    exceptionState->reg_a0 = (unsigned int)currentProcess->p_supportStruct;
+    LDST(exceptionState);
 }
 
-int getProcessID() {        // (NSYS9)
-    return;
+/*
+ * NSYS9 - GetProcessID
+ * Returns the PID of the current process (if parent==0) or
+ * the PID of the parent process (if parent!=0).
+ */
+int getProcessID(int parent) {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+
+    if (parent == 0) {
+        exceptionState->reg_a0 = currentProcess->p_pid;
+    } else {
+        if (currentProcess->p_parent != NULL) {
+            exceptionState->reg_a0 = currentProcess->p_parent->p_pid;
+        } else {
+            exceptionState->reg_a0 = 0;         /* Root has not parent */       // TODO: Valutare se valorizzare a 0 (non specificiato nelle specifiche)
+        }
+    }
+
+    LDST(exceptionState);
 }
 
-void yield() {               // (NSYS10)
-    return;
+/*
+ * NSYS10 - Yield
+ * Relinquishes the CPU. The process is placed at the back of the ready queue.
+ * If it's the only ready process, it continues running.
+ */
+void yield() {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+
+    if (emptyProcQ(&readyQueue)) { /* it's the only process: continue running */
+        LDST(exceptionState);
+    } else {
+        updateCurrentProcessState();
+        list_add_tail(&currentProcess->p_list, &readyQueue);        // TODO: forse su pcb.c ho funzione dedicata?
+    }
 }
 
 
+/* ------------------------ HELPERS ------------------------ */
 
-void terminateCurrentAndChild(pcb_t *proc) {
+/*
+ * Copy the saved exception state into the current process PCB
+ * and update accumulated CPU time.
+ */
+static void updateCurrentProcessState() {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
+    copyState(&currentProcess->p_s, exceptionState);
+
+    cpu_t currentTOD;
+    STCK(currentTOD);
+    currentProcess->p_time += (currentTOD - startTOD);
+}
+
+/*
+ * Recursively terminate a process and all its progeny.
+ * Handles removing from ready queue or unblocking from semaphores.
+ */
+static void terminateRecursive(pcb_t *proc) {
+    /* Recursively terminate all children first */
+    while (!emptyChild(proc)) {
+        pcb_t *child = removeChild(proc);
+        terminateRecursive(child);
+    }
+
+    /* Remove from ready queue (if it's there) */
+    if (outProcQ(&readyQueue, proc) != NULL) {
+        /* Was on the ready queue */
+    }
+    /* Remove from semaphore (if blocked) */
+    else if (proc->p_semAdd != NULL) {
+        /* Save semaphore address before outBlocked clears it */
+        int *savedSemAddr = proc->p_semAdd;
+        outBlocked(proc);
+        /* Adjust semaphore value since we're removing a blocked process */
+        (*savedSemAddr)++;
+        /* If blocked on a device semaphore, adjust soft-block count */
+        if (savedSemAddr >= &deviceSemaphores[0] &&
+            savedSemAddr <= &deviceSemaphores[SEMDEVLEN - 1]) {
+            softBlockCount--;
+        }
+    }
+
+    freePcb(proc);
+    processCount--;
+}
+
+/*
+ * Find a process by PID in the process tree rooted at `root`.
+ * Returns NULL if not found.
+ */
+static pcb_t *findProcessByPid(pcb_t *root, int pid) {
+    if (root == NULL) return NULL;
+    if (root->p_pid == pid) return root;
+
+    /* Search children */
+    pcb_t *child;
+    struct list_head *iter;
+    list_for_each(iter, &root->p_child) {
+        child = container_of(iter, pcb_t, p_sib);
+        pcb_t *found = findProcessByPid(child, pid);
+        if (found != NULL) return found;        // TODO: forse posso evitare check found != NULL
+    }
+    return NULL;
+}
+
+/* void terminateCurrentAndChild(pcb_t *proc) {
     while (!emptyChild(proc)) {
         pcb_t *p_child = removeChild(proc);
         terminateCurrentAndChild(p_child);
@@ -158,4 +358,4 @@ void terminateCurrentAndChild(pcb_t *proc) {
 
     outProcQ(&readyQueue, proc);
     processCount--;
-}
+} */
