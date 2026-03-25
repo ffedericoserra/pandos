@@ -4,7 +4,7 @@
 #include "../phase1/headers/asl.h"
 #include "./headers/scheduler.h"
 
-// Riferimenti esterni alle variabili globali definite in initial.c
+// Riferimenti esterni alle variabili globali definite in init.c
 extern int processCount;
 extern int softBlockCount;
 extern struct list_head readyQueue;

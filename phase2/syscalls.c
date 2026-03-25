@@ -42,7 +42,7 @@ void createProcess(state_t *statep, int prio, support_t *supportp) {
     insertChild(currentProcess, newProc);
 
     /* Place it on readyQueue */
-    insertProcQ(readyQueue, newProc);
+    insertProcQ(&readyQueue, newProc);
     processCount++;
 
     /* Return the new PID to the caller */

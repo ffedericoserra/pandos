@@ -2,7 +2,7 @@
 #ifndef EXCEPTION_H
 #define EXCEPTION_H
 
-#include "/headers/const.h"
+#include "const.h"
 
 /*
 Exception handling interface.

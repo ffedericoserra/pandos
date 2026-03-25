@@ -1,7 +1,7 @@
 #ifndef SYSCALL_H
 #define SYSCALL_H
 
-#include "../../headers/types.h"
+#include "types.h"
 
 /* SYSCALL exception handlers */
 void createProcess(state_t *statep, int prio, support_t *supportp);

@@ -1,0 +1,69 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.25"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "MultiPandOS",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "MultiPandOS::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-MultiPandOS-Debug-7e1413d39e157e9dc2be.json",
+					"name" : "MultiPandOS",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "MultiPandOSuRISCV::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-MultiPandOSuRISCV-Debug-ea0b1608e6d874e8a84a.json",
+					"name" : "MultiPandOSuRISCV",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/yuri/Desktop/pandos/build",
+		"source" : "/home/yuri/Desktop/pandos"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

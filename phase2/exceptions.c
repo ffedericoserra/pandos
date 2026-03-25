@@ -1,9 +1,7 @@
 /* Exception handling and SYSCALL processing implementation. */
 
-#include "/headers/const.h"
+#include "const.h"
 
-#include "exception.h"
-#include "init.h"
 #include "interrupt.h"
 #include "scheduler.h"
 #include "syscall.h"
