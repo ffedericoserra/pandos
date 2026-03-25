@@ -7,11 +7,11 @@ ASM_DEFINES =
 
 ASM_INCLUDES = 
 
-ASM_FLAGS = -g -ffreestanding -static -nostartfiles -nostdlib -I/usr/include -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d
+ASM_FLAGS = -ffreestanding -static -nostartfiles -nostdlib -I/usr/include -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d
 
 C_DEFINES = 
 
 C_INCLUDES = 
 
-C_FLAGS = -g -ffreestanding -static -nostartfiles -nostdlib -I/usr/include -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d
+C_FLAGS = -ffreestanding -static -nostartfiles -nostdlib -I/usr/include -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d
 

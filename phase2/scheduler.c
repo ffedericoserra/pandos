@@ -1,8 +1,8 @@
 /* Scheduler */
 
 
-#include "scheduler.h"
-#include "const.h"
+#include "headers/scheduler.h"
+#include "../headers/const.h"
 #include <uriscv/liburiscv.h>
 
 

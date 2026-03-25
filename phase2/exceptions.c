@@ -1,11 +1,15 @@
 /* Exception handling and SYSCALL processing implementation. */
 
-#include "const.h"
+#include "../headers/const.h"
 
-#include "interrupt.h"
-#include "scheduler.h"
-#include "syscall.h"
-
+#include "headers/interrupt.h"
+#include "headers/scheduler.h"
+#include "headers/syscall.h"
+#include "headers/exception.h"
+#include <uriscv/liburiscv.h>
+#include "../headers/types.h"
+#include "../headers/const.h"
+#include "../headers/listx.h"
 
 /*
 Handles exceptions that must either be passed to the support level
@@ -18,13 +22,12 @@ Otherwise, the exception state is copied into the support structure
 and control is transferred to the support-level handler with LDCXT.
 */
 void PassUpOrDie(int i){
-//note per il gruppo: currrentProcess va dichiarato in un file, LDCXT è una funzione macro fornita da urisc-v, 
-//terminateProcess() e scheduler() vanno implementate in altri file
+
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(i);
 
     if(currentProcess->p_supportStruct==NULL){
         //"die"
-        terminateProcess();  //must terminate the current process, otherwise it doesn't work
+        terminateProcess(currentProcess->p_pid);  //must terminate the current process, otherwise it doesn't work
         scheduler();
     }
     else{
@@ -32,21 +35,10 @@ void PassUpOrDie(int i){
         support_t *sup = currentProcess->p_supportStruct;
 
         //copy the old state
-        sup->sup_exceptState[i] = *exceptionState;
-
+        copyState(&sup->sup_exceptState[i], exceptionState);
+        
         LDCXT(sup->sup_exceptContext[i].stackPtr, sup->sup_exceptContext[i].status, sup->sup_exceptContext[i].pc);
     }
-}
-
-/*
-Handles TLB refill exceptions.
-This handler loads a default TLB entry and then restores the state saved in the BIOS data page.
-*/
-void uTLB_RefillHandler() {
-    setENTRYHI(0x80000000);
-    setENTRYLO(0x00000000);
-    TLBWR();
-    LDST((state_t*) BIOSDATAPAGE);
 }
 
 /*
@@ -121,17 +113,17 @@ void SyscallExceptionHandler() {
     if ((exceptionState->status & MSTATUS_MPP_MASK) == MSTATUS_MPP_U) {
         if (syscallNumber < 0) { /* Privileged syscall from user mode -> simulate PRIVINSTR trap */
             exceptionState->cause = PRIVINSTR;
-            programTrapHandler();
+            ProgramTrapHandler();
             return;
         }
         /* Positive syscall from user mode -> pass up (no PC increment) */
-        passUpOrDie(GENERALEXCEPT);
+        PassUpOrDie(GENERALEXCEPT);
         return;
     }
 
     /* Kernel mode: positive or zero syscall -> pass up (no PC increment) */
     if (syscallNumber >= 0) {
-        passUpOrDie(GENERALEXCEPT);
+        PassUpOrDie(GENERALEXCEPT);
         return;
     }
 
@@ -186,7 +178,7 @@ void SyscallExceptionHandler() {
 
         default:
             /* Non-existent Nucleus service -> Program Trap */
-            programTrapHandler();
+            ProgramTrapHandler();
             break;
     }
 }

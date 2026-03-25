@@ -9,9 +9,6 @@
 #include "./headers/scheduler.h"
 #include "./headers/syscall.h"
 
-/* Pseudo-clock semaphore index */
-#define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)
-
 /* Helper functions declarations */
 static void terminateRecursive(pcb_t *proc);
 static pcb_t *findProcessByPid(pcb_t *root, int pid);
@@ -34,6 +31,7 @@ void createProcess(state_t *statep, int prio, support_t *supportp) {
     }
 
     /* Init new process */
+    
     copyState(&newProc->p_s, statep);
     newProc->p_prio = prio;
     newProc->p_supportStruct = supportp;
@@ -79,13 +77,13 @@ void terminateProcess(int pid) {     // (NSYS2)
      * If so, we need to call the scheduler after termination. */
     int currentDies = (target == currentProcess);
     if (!currentDies) {
-        pcb_t *ancestor = currentProcess->parent;
+        pcb_t *ancestor = currentProcess->p_parent;
         while (ancestor != NULL) {
             if (ancestor == target) {
                 currentDies = 1;
-                break
+                break;
             }
-            ancestor = ancestor->parent;
+            ancestor = ancestor->p_parent;
         }
     }
 
@@ -210,7 +208,7 @@ void doIO(int *commandAddr, int commandValue) {
  * NSYS6 - GetCPUTime
  * Returns accumulated CPU time (in microseconds) for the current process.
  */
-float getCPUTime() {
+void getCPUTime() {
    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
    cpu_t currentTOD;
@@ -250,7 +248,7 @@ void getSupportData() {
  * Returns the PID of the current process (if parent==0) or
  * the PID of the parent process (if parent!=0).
  */
-int getProcessID(int parent) {
+void getProcessID(int parent) {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
     if (parent == 0) {

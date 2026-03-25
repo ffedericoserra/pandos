@@ -1,8 +1,11 @@
 /* Nucleus Initialization */
 
-#include "types.h"
-#include "const.h"
-#include "exception.h"
+#include "../headers/types.h"
+#include "../headers/const.h"
+#include "headers/exception.h"
+#include "../phase1/headers/asl.h"
+#include "../phase1/headers/pcb.h"
+#include "headers/scheduler.h"
 
 // variabili globali
 int processCount;
@@ -17,7 +20,7 @@ cpu_t startTOD;
 int main(){
 
     // inizializzazione del Processor 0 Pass Up Vector
-    passupvector_t *passupvector = PASSUPVECTOR;
+    passupvector_t *passupvector = (passupvector_t*) PASSUPVECTOR;
     passupvector->tlb_refill_handler = (memaddr)uTLB_RefillHandler;
     passupvector->tlb_refill_stackPtr = KERNELSTACK;
     passupvector->exception_handler = (memaddr)ExceptionHandler;
@@ -30,10 +33,10 @@ int main(){
     // inizializzazione delle variabili globali
     processCount = 0;
     softBlockCount = 0;
-    mkEmptyProcQ(readyQueue);
+    mkEmptyProcQ(&readyQueue);
     currentProcess = NULL;
 
-    for(int i = 0; i<SEMDEVLEN; i++)
+    for(int i = 0; i<   SEMDEVLEN; i++)
         deviceSemaphores[i] = 0;
 
 

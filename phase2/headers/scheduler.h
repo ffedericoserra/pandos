@@ -2,9 +2,9 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-#include "types.h"
-#include "listx.h"
-#include "pcb.h"
+#include "../../headers/types.h"
+#include "../../headers/listx.h"
+#include "../../phase1/headers/pcb.h"
 
 // Esportazione delle variabili globali definite in init.c 
 extern int processCount;
