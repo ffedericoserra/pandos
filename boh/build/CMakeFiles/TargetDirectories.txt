@@ -1,0 +1,4 @@
+/media/sf_boh/build/CMakeFiles/MultiPandOS.dir
+/media/sf_boh/build/CMakeFiles/MultiPandOSuRISCV.dir
+/media/sf_boh/build/CMakeFiles/edit_cache.dir
+/media/sf_boh/build/CMakeFiles/rebuild_cache.dir

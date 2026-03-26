@@ -1,0 +1,7 @@
+CMakeFiles/MultiPandOS.dir/phase2/p2test.c.o: \
+ /media/sf_boh/phase2/p2test.c /media/sf_boh/phase2/../headers/const.h \
+ /usr/include/uriscv/const.h /usr/include/uriscv/csr.h \
+ /media/sf_boh/phase2/../headers/types.h /usr/include/uriscv/types.h \
+ /media/sf_boh/phase2/../headers/./const.h \
+ /media/sf_boh/phase2/../headers/./listx.h \
+ /usr/include/uriscv/liburiscv.h
