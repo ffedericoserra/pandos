@@ -36,12 +36,13 @@ int main(){
     mkEmptyProcQ(&readyQueue);
     currentProcess = NULL;
 
-    for(int i = 0; i<   SEMDEVLEN; i++)
+    for(int i = 0; i < SEMDEVLEN; i++)
         deviceSemaphores[i] = 0;
 
 
     // caricamento del Interval Timer a 100ms
-    *((memaddr *) INTERVALTMR) = PSECOND;
+    //*((memaddr *) INTERVALTMR) = PSECOND;
+    LDIT(PSECOND);
 
     // creazione del processo Test
     extern void test();
@@ -63,10 +64,11 @@ int main(){
     pcb->p_s.status = MSTATUS_MPIE_MASK | MSTATUS_MPP_M;
 
     // inizializzazione dei campi del pcb
+    
     pcb->p_parent = NULL;
     INIT_LIST_HEAD(&pcb->p_child);
     INIT_LIST_HEAD(&pcb->p_sib);
-
+    
     pcb->p_time = 0;
     pcb->p_semAdd = NULL;
     pcb->p_supportStruct = NULL;
