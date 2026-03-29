@@ -111,9 +111,9 @@ void ExceptionHandler() {
  * SYSCALL exception handler.
  * Dispatches system calls based on the value in register a0.
  *
- * - Negative a0 in user mode → PRIVINSTR program trap
- * - Negative a0 in kernel mode → Nucleus SYSCALL (NSYS1-10)
- * - Non-negative a0 → Pass Up or Die (support level SYSCALL)
+ * - Negative a0 in user mode -> PRIVINSTR program trap
+ * - Negative a0 in kernel mode -> Nucleus SYSCALL (NSYS1-10)
+ * - Non-negative a0 -> Pass Up or Die (support level SYSCALL)
  */
 void SyscallExceptionHandler() {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
@@ -137,7 +137,7 @@ void SyscallExceptionHandler() {
         return;
     }
 
-    /* Negative syscall in kernel mode → handle at Nucleus level.
+    /* Negative syscall in kernel mode -> handle at Nucleus level.
      * Increment PC by WORDLEN to avoid infinite SYSCALL loop. */
     exceptionState->pc_epc += WORDLEN;
 

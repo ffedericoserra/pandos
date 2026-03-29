@@ -117,7 +117,7 @@ void terminateProcess(int pid) {     // (NSYS2)
 void passeren(int *semaddr) {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
-    *(semaddr--);
+    *(semaddr)--;
 
     if (*semaddr < 0) { /* Block the current process on this semaphore */
         updateCurrentProcessState();
