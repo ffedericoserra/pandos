@@ -1,84 +1,77 @@
 /* Nucleus Initialization */
 
+#include <uriscv/liburiscv.h>
 #include "../headers/types.h"
 #include "../headers/const.h"
-#include "headers/exception.h"
-#include "../phase1/headers/asl.h"
 #include "../phase1/headers/pcb.h"
-#include "headers/scheduler.h"
+#include "../phase1/headers/asl.h"
+#include "./headers/exception.h"
+#include "./headers/scheduler.h"
 
-// variabili globali
+/* Global variables */
 int processCount;
 int softBlockCount;
 struct list_head readyQueue;
-pcb_t* currentProcess;
+pcb_t *currentProcess;
 int deviceSemaphores[SEMDEVLEN];
+cpu_t startTOD;
 
-cpu_t startTOD;     
+int main() {
 
-
-int main(){
-
-    // inizializzazione del Processor 0 Pass Up Vector
-    passupvector_t *passupvector = (passupvector_t*) PASSUPVECTOR;
+    /* Populate Processor 0 Pass Up Vector */
+    passupvector_t *passupvector = (passupvector_t *)PASSUPVECTOR;
     passupvector->tlb_refill_handler = (memaddr)uTLB_RefillHandler;
     passupvector->tlb_refill_stackPtr = KERNELSTACK;
-    passupvector->exception_handler = (memaddr)ExceptionHandler;
+    passupvector->exception_handler = (memaddr)exceptionHandler;
     passupvector->exception_stackPtr = KERNELSTACK;
 
-    // inizializzazione delle strutture dati
+    /* Initialize Level 2 data structures */
     initPcbs();
     initASL();
 
-    // inizializzazione delle variabili globali
+    /* Initialize global variables */
     processCount = 0;
     softBlockCount = 0;
     mkEmptyProcQ(&readyQueue);
     currentProcess = NULL;
 
-    for(int i = 0; i < SEMDEVLEN; i++)
+    /* Initialize device semaphores to 0 (synchronization semaphores) */
+    for (int i = 0; i < SEMDEVLEN; i++)
         deviceSemaphores[i] = 0;
 
-
-    // caricamento del Interval Timer a 100ms
+    /* Load system-wide Interval Timer with 100 milliseconds */
     LDIT(PSECOND);
 
-    // creazione del processo Test
+    /* Declare test process */
     extern void test();
-    
-    // allocazione del pcb 
+
+    /* Allocate and initialize the first process */
     pcb_t *pcb = allocPcb();
 
+    /* Set PC to test address */
+    pcb->p_s.pc_epc = (memaddr)test;
 
-    // set PC all'indirizzo test
-    pcb->p_s.pc_epc = (memaddr) test;
-
-    // set SP a RAMTOP 
+    /* Set SP to RAMTOP */
     RAMTOP(pcb->p_s.reg_sp);
 
-    // abilito gli interrupt
+    /* Enable interrupts */
     pcb->p_s.mie = MIE_ALL;
 
-    // abilito interrupt e kernel mode
+    /* Enable interrupt and kernel mode */
     pcb->p_s.status = MSTATUS_MPIE_MASK | MSTATUS_MPP_M;
 
-    // inizializzazione dei campi del pcb
-    
-    pcb->p_parent = NULL;
-    INIT_LIST_HEAD(&pcb->p_child);
-    INIT_LIST_HEAD(&pcb->p_sib);
-    
+    /* Initialize remaining PCB fields */
     pcb->p_time = 0;
     pcb->p_semAdd = NULL;
     pcb->p_supportStruct = NULL;
 
-    //inserisco il processo nella Ready Queue e aumento il processCount
+    /* Place on Ready Queue and increment Process Count */
     insertProcQ(&readyQueue, pcb);
     processCount++;
 
-
-    //chiamo lo scheduler
+    /* Call the Scheduler */
     scheduler();
+
+    /* Should never reach here */
+    return 0;
 }
-
-

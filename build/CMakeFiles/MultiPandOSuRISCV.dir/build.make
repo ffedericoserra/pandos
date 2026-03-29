@@ -53,10 +53,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/yuri/Desktop/pandos
+CMAKE_SOURCE_DIR = /home/yuri/Documents/pandos
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/yuri/Desktop/pandos/build
+CMAKE_BINARY_DIR = /home/yuri/Documents/pandos/build
 
 # Utility rule file for MultiPandOSuRISCV.
 
@@ -67,7 +67,7 @@ include CMakeFiles/MultiPandOSuRISCV.dir/compiler_depend.make
 include CMakeFiles/MultiPandOSuRISCV.dir/progress.make
 
 CMakeFiles/MultiPandOSuRISCV: MultiPandOS
-	uriscv-elf2uriscv -k /home/yuri/Desktop/pandos/build/MultiPandOS
+	uriscv-elf2uriscv -k /home/yuri/Documents/pandos/build/MultiPandOS
 
 CMakeFiles/MultiPandOSuRISCV.dir/codegen:
 .PHONY : CMakeFiles/MultiPandOSuRISCV.dir/codegen
@@ -85,6 +85,6 @@ CMakeFiles/MultiPandOSuRISCV.dir/clean:
 .PHONY : CMakeFiles/MultiPandOSuRISCV.dir/clean
 
 CMakeFiles/MultiPandOSuRISCV.dir/depend:
-	cd /home/yuri/Desktop/pandos/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/yuri/Desktop/pandos /home/yuri/Desktop/pandos /home/yuri/Desktop/pandos/build /home/yuri/Desktop/pandos/build /home/yuri/Desktop/pandos/build/CMakeFiles/MultiPandOSuRISCV.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /home/yuri/Documents/pandos/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/yuri/Documents/pandos /home/yuri/Documents/pandos /home/yuri/Documents/pandos/build /home/yuri/Documents/pandos/build /home/yuri/Documents/pandos/build/CMakeFiles/MultiPandOSuRISCV.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/MultiPandOSuRISCV.dir/depend
 

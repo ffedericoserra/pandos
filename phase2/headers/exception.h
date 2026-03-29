@@ -1,29 +1,25 @@
-/* placeholder */
 #ifndef EXCEPTION_H
 #define EXCEPTION_H
 
-/*
-Exception handling interface.
-This module implements the kernel-level exception management, 
-including interrupts, TLB exceptions, program traps and syscalls.
-*/
+#include "../../headers/const.h"
+#include "../../headers/types.h"
 
-//Main exception dispatcher
-void ExceptionHandler();
+/* Main exception dispatcher */
+void exceptionHandler();
 
-//System call handler
-void SyscallExceptionHandler();
+/* System call handler */
+void syscallExceptionHandler();
 
-//TLB refill handler
+/* TLB refill handler */
 void uTLB_RefillHandler();
 
-//Program trap handler
-void ProgramTrapHandler();
+/* Program trap handler */
+void programTrapHandler();
 
-//TLB exception handler
-void TLBExceptionHandler();
+/* TLB exception handler */
+void tlbExceptionHandler();
 
-//Pass Up or Die mechanism
-void PassUpOrDie(int i);
+/* Pass Up or Die mechanism */
+void passUpOrDie(int i);
 
 #endif

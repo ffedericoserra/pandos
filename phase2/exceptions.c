@@ -1,114 +1,91 @@
 /* Exception handling and SYSCALL processing implementation. */
 
 #include <uriscv/liburiscv.h>
-#include "./headers/interrupt.h"
-#include "./headers/exception.h"
+#include <uriscv/cpu.h>
 #include "../headers/types.h"
 #include "../headers/const.h"
-#include "../headers/listx.h"
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
+#include "./headers/exception.h"
+#include "./headers/interrupt.h"
 #include "./headers/scheduler.h"
 #include "./headers/syscall.h"
 
+/* uTLB_RefillHandler is defined in p2test.c for Phase 2 testing */
 
 /*
-Handles exceptions that must either be passed to the support level
-or cause the termination of the current process.
-
-If the process has no support structure (p_supportStruct == NULL),
-the process cannot handle the exception and is therefore terminated.
-
-Otherwise, the exception state is copied into the support structure
-and control is transferred to the support-level handler with LDCXT.
-*/
-void PassUpOrDie(int i){
-//note per il gruppo: currrentProcess va dichiarato in un file, LDCXT è una funzione macro fornita da urisc-v, 
-//terminateProcess() e scheduler() vanno implementate in altri file
-    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(i);
-
-    if(currentProcess->p_supportStruct==NULL){
-        //"die"
-        terminateProcess(currentProcess->p_pid);  //must terminate the current process, otherwise it doesn't work
-        scheduler();
-    }
-    else{
-        //pass up
-        support_t *sup = currentProcess->p_supportStruct;
-
-        //copy the old state
-        //sup->sup_exceptState[i] = *exceptionState;
-        copyState(&sup->sup_exceptState[i], exceptionState);
-        LDCXT(sup->sup_exceptContext[i].stackPtr, sup->sup_exceptContext[i].status, sup->sup_exceptContext[i].pc);
-    }
-}
-
-/*
-Handles TLB refill exceptions.
-This handler loads a default TLB entry and then restores the state saved in the BIOS data page.
-
-void uTLB_RefillHandler() {
-    setENTRYHI(0x80000000);
-    setENTRYLO(0x00000000);
-    TLBWR();
-    LDST((state_t*) BIOSDATAPAGE);
-}*/
-
-/*
-Handles program traps by invoking PassUpOrDie for general exceptions.
-*/
-void ProgramTrapHandler(){
-    PassUpOrDie(GENERALEXCEPT);
-}
-
-
-/*
-Handles TLB-related exceptions. The exception is either passed to the support level or the process is killed.
-*/
-void TLBExceptionHandler(){
-    PassUpOrDie(PGFAULTEXCEPT);
-}
-
-/*
-Main exception dispatcher of the kernel.
-It examines the cause register to determine the type of exception and calls the appropriate handler.
+ * Pass Up or Die mechanism.
+ * If the process has no support structure, terminate it.
+ * Otherwise, copy the exception state and pass control to the support level handler.
  */
-void ExceptionHandler() {
+void passUpOrDie(int i) {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
-    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(GENERALEXCEPT);
+    if (currentProcess->p_supportStruct == NULL) {
+        /* "Die" - terminate the current process and all progeny */
+        terminateProcess(0);
+        /* terminateProcess(0) calls scheduler() internally, never returns */
+    } else {
+        /* "Pass Up" - copy exception state and transfer control */
+        support_t *sup = currentProcess->p_supportStruct;
+        copyState(&sup->sup_exceptState[i], exceptionState);
+        LDCXT(sup->sup_exceptContext[i].stackPtr,
+              sup->sup_exceptContext[i].status,
+              sup->sup_exceptContext[i].pc);
+    }
+}
 
+/*
+ * Program Trap exception handler.
+ */
+void programTrapHandler() {
+    passUpOrDie(GENERALEXCEPT);
+}
+
+/*
+ * TLB exception handler.
+ */
+void tlbExceptionHandler() {
+    passUpOrDie(PGFAULTEXCEPT);
+}
+
+/*
+ * Main exception dispatcher.
+ * Examines the cause register and routes to the appropriate handler.
+ *
+ * µRISCV cause register format (RISC-V style):
+ *   bit 31: interrupt flag (1=interrupt, 0=exception)
+ *   bits 30:0: exception/interrupt code (stored directly, no shift)
+ */
+void exceptionHandler() {
+    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
     unsigned int cause = exceptionState->cause;
-    int excCode = (cause & GETEXECCODE) >> CAUSESHIFT;
 
-    //check interrupts for interrupt handler
-    if (CAUSE_IP_GET(cause, IL_TIMER) ||
-    CAUSE_IP_GET(cause, IL_CPUTIMER) ||
-    CAUSE_IP_GET(cause, IL_IPI) ||
-    CAUSE_IP_GET(cause, IL_DISK) ||
-    CAUSE_IP_GET(cause, IL_FLASH) ||
-    CAUSE_IP_GET(cause, IL_PRINTER) ||
-    CAUSE_IP_GET(cause, IL_TERMINAL)) {
-
+    /* Check if this is an interrupt */
+    if (CAUSE_IS_INT(cause)) {
         InterruptHandler();
         return;
     }
 
-    //TLB exception handler
-    if (excCode == TLBINVLDL || excCode == TLBINVLDS) {
-        TLBExceptionHandler();
+    /* Extract exception code (RISC-V: lower 31 bits, no shift) */
+    unsigned int excCode = cause & CAUSE_EXCCODE_MASK;
+
+    /* SYSCALL exceptions:
+     * EXC_ECU=8 (ecall from U-mode), EXC_ECM=11 (ecall from M-mode) */
+    if (excCode == EXC_ECU || excCode == EXC_ECM) {
+        syscallExceptionHandler();
         return;
     }
 
-    //Syscall handler
-    if (excCode == SYSEXCEPTION) {
-        SyscallExceptionHandler();
+    /* TLB exceptions (codes 24-28 per spec) */
+    if (excCode >= EXC_MOD && excCode <= EXC_UTLBS) {
+        tlbExceptionHandler();
         return;
     }
 
-    //Program Trap handler
-    ProgramTrapHandler();
+    /* All other exceptions are Program Traps */
+    programTrapHandler();
 }
-
 
 /*
  * SYSCALL exception handler.
@@ -118,25 +95,26 @@ void ExceptionHandler() {
  * - Negative a0 in kernel mode → Nucleus SYSCALL (NSYS1-10)
  * - Non-negative a0 → Pass Up or Die (support level SYSCALL)
  */
-void SyscallExceptionHandler() {
+void syscallExceptionHandler() {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
-    int syscallNumber = exceptionState->reg_a0;
-    
+    int syscallNumber = (int)exceptionState->reg_a0;
+
     /* User-mode check for privileged (negative) syscalls */
     if ((exceptionState->status & MSTATUS_MPP_MASK) == MSTATUS_MPP_U) {
-        if (syscallNumber < 0) { /* Privileged syscall from user mode -> simulate PRIVINSTR trap */
+        if (syscallNumber < 0) {
+            /* Privileged syscall from user mode → simulate PRIVINSTR trap */
             exceptionState->cause = PRIVINSTR;
-            ProgramTrapHandler();
+            programTrapHandler();
             return;
         }
-        /* Positive syscall from user mode -> pass up (no PC increment) */
-        PassUpOrDie(GENERALEXCEPT);
+        /* Positive syscall from user mode → pass up (no PC increment) */
+        passUpOrDie(GENERALEXCEPT);
         return;
     }
 
-    /* Kernel mode: positive or zero syscall -> pass up (no PC increment) */
+    /* Kernel mode: positive or zero syscall → pass up (no PC increment) */
     if (syscallNumber >= 0) {
-        PassUpOrDie(GENERALEXCEPT);
+        passUpOrDie(GENERALEXCEPT);
         return;
     }
 
@@ -190,8 +168,8 @@ void SyscallExceptionHandler() {
             break;
 
         default:
-            /* Non-existent Nucleus service -> Program Trap */
-            ProgramTrapHandler();
+            /* Non-existent Nucleus service → Program Trap */
+            programTrapHandler();
             break;
     }
 }
