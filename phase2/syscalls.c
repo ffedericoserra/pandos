@@ -42,7 +42,7 @@ void createProcess(state_t *statep, int prio, support_t *supportp) {
     insertChild(currentProcess, newProc);
 
     /* Place it on readyQueue */
-    insertProcQ(readyQueue, newProc);
+    insertProcQ(&readyQueue, newProc);
     processCount++;
 
     /* Return the new PID to the caller */
@@ -79,13 +79,13 @@ void terminateProcess(int pid) {     // (NSYS2)
      * If so, we need to call the scheduler after termination. */
     int currentDies = (target == currentProcess);
     if (!currentDies) {
-        pcb_t *ancestor = currentProcess->parent;
+        pcb_t *ancestor = currentProcess->p_parent;
         while (ancestor != NULL) {
             if (ancestor == target) {
                 currentDies = 1;
-                break
+                break;
             }
-            ancestor = ancestor->parent;
+            ancestor = ancestor->p_parent;
         }
     }
 
@@ -117,7 +117,7 @@ void terminateProcess(int pid) {     // (NSYS2)
 void passeren(int *semaddr) {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
-    *(semaddr)--;
+    (*semaddr)--;
 
     if (*semaddr < 0) { /* Block the current process on this semaphore */
         updateCurrentProcessState();
@@ -210,7 +210,7 @@ void doIO(int *commandAddr, int commandValue) {
  * NSYS6 - GetCPUTime
  * Returns accumulated CPU time (in microseconds) for the current process.
  */
-float getCPUTime() {
+void getCPUTime() {
    state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
    cpu_t currentTOD;
@@ -230,6 +230,7 @@ void waitForClock() {
     updateCurrentProcessState();
     deviceSemaphores[PSEUDOCLOCK_SEM]--;            // TODO: passeren(deviceSemaphores[PSEUDOCLOCK_SEM]);
     insertBlocked(&deviceSemaphores[PSEUDOCLOCK_SEM], currentProcess);
+    softBlockCount++;
 
     currentProcess = NULL;
     scheduler();
@@ -250,16 +251,16 @@ void getSupportData() {
  * Returns the PID of the current process (if parent==0) or
  * the PID of the parent process (if parent!=0).
  */
-int getProcessID(int parent) {
+void getProcessID(int parent) {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
     if (parent == 0) {
         exceptionState->reg_a0 = currentProcess->p_pid;
     } else {
-        if (currentProcess->p_parent != NULL) {
-            exceptionState->reg_a0 = currentProcess->p_parent->p_pid;
-        } else {
+        if (currentProcess->p_parent == NULL) {
             exceptionState->reg_a0 = 0;         /* Root has not parent */       // TODO: Valutare se valorizzare a 0 (non specificiato nelle specifiche)
+        } else {
+            exceptionState->reg_a0 = currentProcess->p_parent->p_pid;
         }
     }
 
@@ -279,6 +280,8 @@ void yield() {
     } else {
         updateCurrentProcessState();
         list_add_tail(&currentProcess->p_list, &readyQueue);        // TODO: forse su pcb.c ho funzione dedicata?
+        currentProcess = NULL;
+        scheduler();
     }
 }
 
