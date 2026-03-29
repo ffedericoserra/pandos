@@ -1,10 +1,7 @@
-/* placeholder */
-#ifndef INTERRUPTS_H
-#define INTERRUPTS_H
+#ifndef INTERRUPT_H
+#define INTERRUPT_H
 
-#include <uriscv/liburiscv.h>
-#include "../../headers/types.h"
-
-void interruptHandler();
+/* Device/timer interrupt exception handler */
+void InterruptHandler();
 
 #endif

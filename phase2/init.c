@@ -41,7 +41,6 @@ int main(){
 
 
     // caricamento del Interval Timer a 100ms
-    //*((memaddr *) INTERVALTMR) = PSECOND;
     LDIT(PSECOND);
 
     // creazione del processo Test

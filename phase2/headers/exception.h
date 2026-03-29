@@ -2,7 +2,6 @@
 #ifndef EXCEPTION_H
 #define EXCEPTION_H
 
-
 /*
 Exception handling interface.
 This module implements the kernel-level exception management, 

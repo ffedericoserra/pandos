@@ -16,7 +16,7 @@ void scheduler(){
         // Caso 2: Ci sono processi, ma sono tutti bloccati
         else if (processCount > 0 && softBlockCount > 0) {
             // Imposta il Wait State
-            //currentProcess = NULL;
+            
             setMIE(MIE_ALL & ~MIE_MTIE_MASK);
             
             // Abilita gli interrupt globali nel registro STATUS
