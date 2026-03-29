@@ -14,5 +14,5 @@ void waitForClock();
 void getSupportData();
 void getProcessID(int parent);
 void yield();
-
+extern int deviceSemaphores[48]; // 48 semafori come da specifica
 #endif

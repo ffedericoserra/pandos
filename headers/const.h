@@ -239,5 +239,7 @@
 #define IRT_NUM_ENTRY 48
 /* Task Priority Register */
 #define TPR 0x10000408 
+/* Pseudo-clock semaphore index */
+#define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)
 #endif
 

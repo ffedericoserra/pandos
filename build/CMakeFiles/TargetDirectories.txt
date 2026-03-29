@@ -1,0 +1,4 @@
+/home/yuri/Documents/pandos/build/CMakeFiles/MultiPandOS.dir
+/home/yuri/Documents/pandos/build/CMakeFiles/MultiPandOSuRISCV.dir
+/home/yuri/Documents/pandos/build/CMakeFiles/edit_cache.dir
+/home/yuri/Documents/pandos/build/CMakeFiles/rebuild_cache.dir
