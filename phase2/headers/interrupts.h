@@ -1,5 +1,5 @@
-#ifndef INTERRUPT_H
-#define INTERRUPT_H
+#ifndef INTERRUPTS_H
+#define INTERRUPTS_H
 
 /* Device/timer interrupt exception handler */
 void InterruptHandler();

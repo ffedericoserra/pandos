@@ -7,7 +7,7 @@
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
 #include "./headers/scheduler.h"
-#include "./headers/syscall.h"
+#include "./headers/syscalls.h"
 
 /* Pseudo-clock semaphore index */
 #define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)

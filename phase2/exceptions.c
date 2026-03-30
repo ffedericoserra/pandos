@@ -9,10 +9,10 @@
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
 
-#include "./headers/exception.h"
-#include "./headers/interrupt.h"
+#include "./headers/exceptions.h"
+#include "./headers/interrupts.h"
 #include "./headers/scheduler.h"
-#include "./headers/syscall.h"
+#include "./headers/syscalls.h"
 
 /*
 Handles exceptions that must either be passed to the support level

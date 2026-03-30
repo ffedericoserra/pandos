@@ -7,7 +7,7 @@
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
 #include "./headers/scheduler.h"
-#include "./headers/interrupt.h"
+#include "./headers/interrupts.h"
 
 /* Interrupting Devices Bit Map base address */
 #define INTDEV_BITMAP 0x10000040

@@ -5,7 +5,7 @@
 #include "../headers/const.h"
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
-#include "./headers/exception.h"
+#include "./headers/exceptions.h"
 #include "./headers/scheduler.h"
 
 /* Global variables */
