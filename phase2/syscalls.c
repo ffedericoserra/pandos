@@ -23,7 +23,7 @@
 /* Helper functions declarations */
 static void terminateRecursive(pcb_t *proc);
 static pcb_t *findProcessByPid(pcb_t *root, int pid);
-static void updateCurrentProcessState();
+static inline void updateCurrentProcessState();
 
 
 /*
@@ -63,7 +63,7 @@ void createProcess(state_t *statep, int prio, support_t *supportp) {
  * Terminates the current process (if pid==0) or the process with the given PID.
  * Recursively terminates all progeny. Calls the scheduler afterwards.
  */
-void terminateProcess(int pid) {     // (NSYS2)
+void terminateProcess(int pid) {
     /* Select target process by pid */
     pcb_t *target;
     if (pid == 0) {
@@ -296,7 +296,7 @@ void yield() {
  * Copy the saved exception state into the current process PCB
  * and update accumulated CPU time.
  */
-static void updateCurrentProcessState() {
+static inline void updateCurrentProcessState() {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
     copyState(&currentProcess->p_s, exceptionState);
 
@@ -352,17 +352,7 @@ static pcb_t *findProcessByPid(pcb_t *root, int pid) {
     list_for_each(iter, &root->p_child) {
         child = container_of(iter, pcb_t, p_sib);
         pcb_t *found = findProcessByPid(child, pid);
-        if (found != NULL) return found;        // TODO: forse posso evitare check found != NULL
+        if (found != NULL) return found;
     }
     return NULL;
 }
-
-/* void terminateCurrentAndChild(pcb_t *proc) {
-    while (!emptyChild(proc)) {
-        pcb_t *p_child = removeChild(proc);
-        terminateCurrentAndChild(p_child);
-    }
-
-    outProcQ(&readyQueue, proc);
-    processCount--;
-} */

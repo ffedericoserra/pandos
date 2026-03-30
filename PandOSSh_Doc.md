@@ -45,6 +45,7 @@ code, and phase-specific implementations.
     (Semaphore Descriptor), and `support_t`.
   - `listx.h`: An implementation of circular, doubly-linked lists derived from the Linux
     Kernel.
+  - `utils.h`: Utility helper functions shared across kernel modules (e.g. `copyState()`).
 - **phase1/**: Contains the source code specific to Phase 1.
   - `pcb.c`, `headers/pcb.h`: Implementation of PCB allocation, queues, and trees.
   - `asl.c`, `headers/asl.h`: Implementation of the Active Semaphore List (ASL).
@@ -408,7 +409,7 @@ instead they call `scheduler()` to dispatch another process.
 
 **Helper Functions:**
 
-- **`static void updateCurrentProcessState()`**
+- **`static inline void updateCurrentProcessState()`**
   - Copies the BIOS-saved exception state into `currentProcess->p_s` via `copyState()`.
   - Updates accumulated CPU time: `p_time += currentTOD - startTOD`.
   - Called before any blocking syscall to preserve the caller's state in its PCB.

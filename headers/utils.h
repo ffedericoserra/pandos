@@ -1,3 +1,6 @@
+/*
+ * Utility helper functions shared across kernel modules.
+ */
 #ifndef UTILS_H
 #define UTILS_H
 
