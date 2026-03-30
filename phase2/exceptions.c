@@ -30,14 +30,14 @@ void passUpOrDie(int i){
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
 
     if(currentProcess->p_supportStruct==NULL){
-        //"die"
-        terminateProcess(0);  //must terminate the current process, otherwise it doesn't work
+        /*"Die"*/
+        terminateProcess(0);
     }
     else{
-        //pass up
+        /*Pass up*/
         support_t *sup = currentProcess->p_supportStruct;
 
-        //copy the old state
+        /*Copy the old state*/
         copyState(&sup->sup_exceptState[i], exceptionState);
         
         LDCXT(sup->sup_exceptContext[i].stackPtr, sup->sup_exceptContext[i].status, sup->sup_exceptContext[i].pc);
@@ -62,70 +62,69 @@ void tlbExceptionHandler(){
 /*
 Main exception dispatcher of the kernel.
 It examines the cause register to determine the type of exception and calls the appropriate handler.
- */
+*/
 void exceptionHandler() {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
     unsigned int cause = exceptionState->cause;
 
-    /* Check if this is an interrupt */
+    /*Check if this is an interrupt*/
     if (CAUSE_IS_INT(cause)) {
         InterruptHandler();
         return;
     }
 
-    /* Extract exception code (RISC-V: lower 31 bits, no shift) */
+    /*Extract exception code (RISC-V: lower 31 bits, no shift)*/
     unsigned int excCode = cause & CAUSE_EXCCODE_MASK;
 
-    /* SYSCALL exceptions:
-     * EXC_ECU=8 (ecall from U-mode), EXC_ECM=11 (ecall from M-mode) */
+    /*SYSCALL exceptions: EXC_ECU=8 (ecall from U-mode), EXC_ECM=11 (ecall from M-mode)*/
     if (excCode == EXC_ECU || excCode == EXC_ECM) {
         syscallExceptionHandler();
         return;
     }
 
-    /* TLB exceptions (codes 24-28 per spec) */
+    /*TLB exceptions (codes 24-28 per spec)*/
     if (excCode >= EXC_MOD && excCode <= EXC_UTLBS) {
         tlbExceptionHandler();
         return;
     }
 
-    /* All other exceptions are Program Traps */
+    /*All other exceptions are Program Traps*/
     programTrapHandler();
 }
 
 
 /*
- * SYSCALL exception handler.
- * Dispatches system calls based on the value in register a0.
- *
- * - Negative a0 in user mode ? PRIVINSTR program trap
- * - Negative a0 in kernel mode ? Nucleus SYSCALL (NSYS1-10)
- * - Non-negative a0 ? Pass Up or Die (support level SYSCALL)
- */
+Dispatches system calls based on the value in register a0.
+In user mode, negative values are treated as privileged instructions (Program Trap),
+while non-negative ones are passed up to the support level.
+
+In kernel mode, negative values are handled by the Nucleus (NSYS1–10),
+while non-negative ones are passed up.
+*/
 void syscallExceptionHandler() {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
     int syscallNumber = (int)exceptionState->reg_a0;
     
-    /* User-mode check for privileged (negative) syscalls */
+    /*User-mode check for privileged (negative) syscalls*/
     if ((exceptionState->status & MSTATUS_MPP_MASK) == MSTATUS_MPP_U) {
-        if (syscallNumber < 0) { /* Privileged syscall from user mode -> simulate PRIVINSTR trap */
+        if (syscallNumber < 0) { /*Privileged syscall from user mode -> simulate PRIVINSTR trap*/
             exceptionState->cause = PRIVINSTR;
             programTrapHandler();
             return;
         }
-        /* Positive syscall from user mode -> pass up (no PC increment) */
+        /*Positive syscall from user mode -> pass up (no PC increment)*/
         passUpOrDie(GENERALEXCEPT);
         return;
     }
 
-    /* Kernel mode: positive or zero syscall -> pass up (no PC increment) */
+    /*Kernel mode: positive or zero syscall -> pass up (no PC increment)*/
     if (syscallNumber >= 0) {
         passUpOrDie(GENERALEXCEPT);
         return;
     }
 
-    /* Negative syscall in kernel mode ? handle at Nucleus level.
-     * Increment PC by WORDLEN to avoid infinite SYSCALL loop. */
+    /*Negative syscall in kernel mode ? handle at Nucleus level.*/
+    /*Increment PC by WORDLEN to avoid infinite SYSCALL loop.*/
     exceptionState->pc_epc += WORDLEN;
 
     unsigned int arg1 = exceptionState->reg_a1;
@@ -174,7 +173,7 @@ void syscallExceptionHandler() {
             break;
 
         default:
-            /* Non-existent Nucleus service -> Program Trap */
+            /*Non-existent Nucleus service -> Program Trap*/
             programTrapHandler();
             break;
     }
