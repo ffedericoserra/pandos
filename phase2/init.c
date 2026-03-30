@@ -13,6 +13,7 @@ int processCount;
 int softBlockCount;
 struct list_head readyQueue;
 pcb_t *currentProcess;
+pcb_t *rootProcess;
 int deviceSemaphores[SEMDEVLEN];
 cpu_t startTOD;
 
@@ -66,6 +67,7 @@ int main() {
     pcb->p_supportStruct = NULL;
 
     /* Place on Ready Queue and increment Process Count */
+    rootProcess = pcb;
     insertProcQ(&readyQueue, pcb);
     processCount++;
 

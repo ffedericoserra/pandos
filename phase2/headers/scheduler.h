@@ -11,6 +11,7 @@ extern int processCount;
 extern int softBlockCount;
 extern struct list_head readyQueue;
 extern pcb_t *currentProcess;
+extern pcb_t *rootProcess;
 extern cpu_t startTOD;
 
 // Dichiarazione della funzione principale dello scheduler 

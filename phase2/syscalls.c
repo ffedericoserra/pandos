@@ -61,11 +61,7 @@ void terminateProcess(int pid) {     // (NSYS2)
     if (pid == 0) {
         target = currentProcess;
     } else {
-        pcb_t *root = currentProcess;
-        while (root->p_parent != NULL) {
-            root = root->p_parent;              // ?? c'è modo per arrivare a processo root senza questo meccanismo?
-        }
-        target = findProcessByPid(root, pid);
+        target = findProcessByPid(rootProcess, pid);
 
         /* Process not found, return to caller */
         if (target == NULL) {

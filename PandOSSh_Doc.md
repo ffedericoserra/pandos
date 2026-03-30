@@ -168,6 +168,7 @@ module headers, represent the entire kernel state:
 | `readyQueue` | `struct list_head` | Priority-ordered queue of processes ready to execute. FIFO in case of equal priorities. |
 | `currentProcess` | `pcb_t *` | Pointer to the currently running process, or `NULL` if no process is running (e.g., during scheduling). |
 | `deviceSemaphores[49]` | `int[]` | One semaphore per device sub-device (48 entries) plus one for the pseudo-clock timer (last index). |
+| `rootProcess` | `pcb_t *` | Pointer to the root process (the first process created at boot). Used to search the entire process tree by PID. |
 | `startTOD` | `cpu_t` | Time Of Day clock snapshot taken when the current process was dispatched; used for CPU time accounting. |
 
 ### 4.2. Initialization (phase2/init.c)
@@ -191,8 +192,8 @@ The `main()` function is the nucleus entry point, called by the BIOS after hardw
        `LDIT()`. This starts the pseudo-clock, which will fire periodic interrupts.
     5. **First process creation**: Allocates a PCB, sets its PC to the `test()` function address,
        sets SP to `RAMTOP`, enables all interrupts (`MIE_ALL`), sets kernel mode with
-       interrupts enabled on return (`MSTATUS_MPIE_MASK | MSTATUS_MPP_M`), places it
-       on the ready queue, and increments `processCount`.
+       interrupts enabled on return (`MSTATUS_MPIE_MASK | MSTATUS_MPP_M`), stores it
+       in `rootProcess`, places it on the ready queue, and increments `processCount`.
     6. **Scheduler invocation**: Calls `scheduler()`, which dispatches the first process. Control
        never returns to `main()`.
 
@@ -345,7 +346,7 @@ instead they call `scheduler()` to dispatch another process.
 - **`void terminateProcess(int pid)`** - NSYS2
   - Terminates a process and all its descendants:
     1. If `pid == 0`, targets the current process. Otherwise, searches the entire process
-       tree (from root) for a process with the given PID.
+       tree starting from `rootProcess` for a process with the given PID.
     2. Determines whether the current process will die (either it is the target or a
        descendant of it).
     3. If the current process dies, updates its accumulated CPU time before termination.
