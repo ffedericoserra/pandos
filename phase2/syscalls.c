@@ -12,6 +12,13 @@
 /* Pseudo-clock semaphore index */
 #define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)
 
+/* Device register layout constants */
+#define DEV_REG_SIZE    0x10    /* Size of a single device register (16 bytes) */
+#define DEV_LINE_SIZE   0x80    /* Size of all device registers on one interrupt line (8 * 0x10) */
+#define TERM_LINE_NO    7       /* Interrupt line number for terminal devices */
+#define TRANSM_CMD_OFF  0x0C   /* Offset of transm_command within a terminal device register */
+#define TERM_SEM_START  (4 * DEVPERINT)  /* First semaphore index for terminal devices (32) */
+
 /* Helper functions declarations */
 static void terminateRecursive(pcb_t *proc);
 static pcb_t *findProcessByPid(pcb_t *root, int pid);
@@ -134,7 +141,7 @@ void verhogen(int *semaddr) {
 
     (*semaddr)++;
 
-    if (*semaddr <= 0) { /* Unblock process (aka: insert it in readyQueue) */
+    if (*semaddr <= 0) { /* Unblock process */
         pcb_t *unblocked = removeBlocked(semaddr);
         if (unblocked != NULL) {
             insertProcQ(&readyQueue, unblocked);
@@ -169,19 +176,17 @@ void doIO(int *commandAddr, int commandValue) {
      * Terminal transm_command: base + 0x0C, so base = cmdAddr - 0x0C
      */
     unsigned int offset = cmdAddr - START_DEVREG;
-    int intLineNo = offset / 0x80 + 3;      /* Interrupt lines 3-7 */
-    int devNo = (offset % 0x80) / 0x10;     /* Device number 0-7 */
+    int intLineNo = offset / DEV_LINE_SIZE + 3;      /* Interrupt lines 3-7 */
+    int devNo = (offset % DEV_LINE_SIZE) / DEV_REG_SIZE;     /* Device number 0-7 */
 
     int semIndex;
-    if (intLineNo == 7) {
+    if (intLineNo == TERM_LINE_NO) {
         /* Determine transmit vs receive from offset */
-        unsigned int withinDev = offset % 0x10;
-        if (withinDev == 0x0C) {
-            /* transm_command */
-            semIndex = (4 * DEVPERINT) + devNo;                 /* 32 + devNo */
+        unsigned int withinDev = offset % DEV_REG_SIZE;
+        if (withinDev == TRANSM_CMD_OFF) {
+            semIndex = TERM_SEM_START + devNo;
         } else {
-            /* recv_command */
-            semIndex = (4 * DEVPERINT) + devNo + DEVPERINT;     /* 40 + devNo */
+            semIndex = TERM_SEM_START + DEVPERINT + devNo;
         }
     } else {
         semIndex = (intLineNo - 3) * DEVPERINT + devNo;
