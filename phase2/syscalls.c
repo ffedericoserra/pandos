@@ -3,6 +3,7 @@
 #include <uriscv/liburiscv.h>
 #include "../headers/types.h"
 #include "../headers/const.h"
+#include "../headers/utils.h"
 #include "../headers/listx.h"
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
@@ -16,7 +17,7 @@
 #define DEV_REG_SIZE    0x10    /* Size of a single device register (16 bytes) */
 #define DEV_LINE_SIZE   0x80    /* Size of all device registers on one interrupt line (8 * 0x10) */
 #define TERM_LINE_NO    7       /* Interrupt line number for terminal devices */
-#define TRANSM_CMD_OFF  0x0C   /* Offset of transm_command within a terminal device register */
+#define TRANSM_CMD_OFF  0x0C    /* Offset of transm_command within a terminal device register */
 #define TERM_SEM_START  (4 * DEVPERINT)  /* First semaphore index for terminal devices (32) */
 
 /* Helper functions declarations */
@@ -176,7 +177,7 @@ void doIO(int *commandAddr, int commandValue) {
      * Terminal transm_command: base + 0x0C, so base = cmdAddr - 0x0C
      */
     unsigned int offset = cmdAddr - START_DEVREG;
-    int intLineNo = offset / DEV_LINE_SIZE + 3;      /* Interrupt lines 3-7 */
+    int intLineNo = offset / DEV_LINE_SIZE + 3;              /* Interrupt lines 3-7 */
     int devNo = (offset % DEV_LINE_SIZE) / DEV_REG_SIZE;     /* Device number 0-7 */
 
     int semIndex;
@@ -195,8 +196,8 @@ void doIO(int *commandAddr, int commandValue) {
     /* Block current process */
     updateCurrentProcessState();
 
-    /* P on device semaphore */
-    deviceSemaphores[semIndex]--;           // TODO: passeren(deviceSemaphores[semIndex]);
+    /* P on device semaphore: always block unconditionally, no value check needed, different logic from `passeren()`. */
+    deviceSemaphores[semIndex]--;
     insertBlocked(&deviceSemaphores[semIndex], currentProcess);
     softBlockCount++;
 
@@ -229,7 +230,7 @@ void getCPUTime() {
 void waitForClock() {
     /* P on pseudo-clock semaphore */
     updateCurrentProcessState();
-    deviceSemaphores[PSEUDOCLOCK_SEM]--;            // TODO: passeren(deviceSemaphores[PSEUDOCLOCK_SEM]);
+    deviceSemaphores[PSEUDOCLOCK_SEM]--;
     insertBlocked(&deviceSemaphores[PSEUDOCLOCK_SEM], currentProcess);
     softBlockCount++;
 
@@ -259,7 +260,7 @@ void getProcessID(int parent) {
         exceptionState->reg_a0 = currentProcess->p_pid;
     } else {
         if (currentProcess->p_parent == NULL) {
-            exceptionState->reg_a0 = 0;         /* Root has not parent */       // TODO: Valutare se valorizzare a 0 (non specificiato nelle specifiche)
+            exceptionState->reg_a0 = 0;         /* Root has not parent */
         } else {
             exceptionState->reg_a0 = currentProcess->p_parent->p_pid;
         }
@@ -280,7 +281,9 @@ void yield() {
         LDST(exceptionState);
     } else {
         updateCurrentProcessState();
-        list_add_tail(&currentProcess->p_list, &readyQueue);        // TODO: forse su pcb.c ho funzione dedicata?
+        /* We are using list_add_tail instead of insertProcQ to ensure the process
+         * is placed at the back of the queue regardless of priority. */
+        list_add_tail(&currentProcess->p_list, &readyQueue);  
         currentProcess = NULL;
         scheduler();
     }

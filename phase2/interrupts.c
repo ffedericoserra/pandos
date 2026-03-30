@@ -4,6 +4,7 @@
 #include <uriscv/cpu.h>
 #include "../headers/types.h"
 #include "../headers/const.h"
+#include "../headers/utils.h"
 #include "../phase1/headers/pcb.h"
 #include "../phase1/headers/asl.h"
 #include "./headers/scheduler.h"
