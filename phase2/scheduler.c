@@ -17,9 +17,8 @@ void scheduler(){
         else if (processCount > 0 && softBlockCount > 0) {
             // Imposta il Wait State
             
-            setMIE(MIE_ALL & ~MIE_MTIE_MASK);
-            
             // Abilita gli interrupt globali nel registro STATUS
+            setMIE(MIE_ALL & ~MIE_MTIE_MASK);
             unsigned int status = getSTATUS(); 
             status |= MSTATUS_MIE_MASK; 
             setSTATUS(status);
@@ -38,7 +37,7 @@ void scheduler(){
         currentProcess = removeProcQ(&readyQueue);
         
         // Record start time for CPU time accounting
-        STCK(startTOD);     // AGGIUNTA FEDE
+        STCK(startTOD);
 
         // Carica il PLT con il time slice (5 millisecondi)
         setTIMER(TIMESLICE);
