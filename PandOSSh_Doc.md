@@ -169,6 +169,11 @@ module headers, represent the entire kernel state:
 | `readyQueue` | `struct list_head` | Priority-ordered queue of processes ready to execute. FIFO in case of equal priorities. |
 | `currentProcess` | `pcb_t *` | Pointer to the currently running process, or `NULL` if no process is running (e.g., during scheduling). |
 | `deviceSemaphores[49]` | `int[]` | One semaphore per device sub-device (48 entries) plus one for the pseudo-clock timer (last index). |
+
+The following global variables are utility variables used in Phase 2 modules.
+
+| Variable | Type | Description |
+|---|---|---|
 | `rootProcess` | `pcb_t *` | Pointer to the root process (the first process created at boot). Used to search the entire process tree by PID. |
 | `startTOD` | `cpu_t` | Time Of Day clock snapshot taken when the current process was dispatched; used for CPU time accounting. |
 
@@ -217,7 +222,7 @@ has its time slice expire.
     3. **Ready queue empty, `softBlockCount > 0`**: All remaining processes are blocked
        waiting for I/O or the pseudo-clock. Enters a **Wait State**: enables all interrupts
        except the PLT timer (`MIE_ALL & ~MIE_MTIE_MASK`), enables global interrupts in
-       the STATUS register, and calls `WAIT()`. The PLT is excluded to prevent spurious
+       the STATUS register, and calls `WAIT()`. The PLT is excluded to prevent false
        time-slice interrupts while no process is running.
     4. **Ready queue empty, `softBlockCount == 0`**: Deadlock detected (processes exist but
        none can make progress). Calls `PANIC()`.
@@ -237,18 +242,18 @@ transfers control to `exceptionHandler()`.
     | Cause | Handler |
     |---|---|
     | Interrupt (bit 31 set) | `InterruptHandler()` |
-    | ECALL from U-mode (`EXC_ECU=8`) or M-mode (`EXC_ECM=11`) | `syscallExceptionHandler()` |
+    | SYSCALL from User mode (`EXC_ECU=8`) or Machine mode (`EXC_ECM=11`) | `syscallExceptionHandler()` |
     | TLB exceptions (`EXC_MOD` through `EXC_UTLBS`) | `tlbExceptionHandler()` |
     | All other exception codes | `programTrapHandler()` |
 
 - **`void syscallExceptionHandler()`**
-  - Handles the ECALL exception by examining register `a0` for the syscall number:
+  - Handles the SYSCALL exception by examining register `a0` for the syscall number:
     - **User mode + negative syscall number**: Privileged operation from user mode.
       Simulates a `PRIVINSTR` program trap (sets cause, calls `programTrapHandler()`).
     - **Non-negative syscall number** (any mode): Not a nucleus syscall. Passes to the
       support level via `passUpOrDie(GENERALEXCEPT)`.
     - **Kernel mode + negative syscall number**: Nucleus syscall. Increments PC by
-      `WORDLEN` (to skip past the ECALL instruction), extracts arguments from registers
+      `WORDLEN` (to skip past the SYSCALL instruction), extracts arguments from registers
       `a1`, `a2`, `a3`, and dispatches to the appropriate NSYS handler via a switch statement.
 - **`void passUpOrDie(int i)`**
   - Implements the "pass up or die" mechanism for exceptions the nucleus cannot handle:
@@ -260,7 +265,7 @@ transfers control to `exceptionHandler()`.
   - The index `i` is `PGFAULTEXCEPT` (0) for TLB exceptions or `GENERALEXCEPT` (1) for
     program traps and support-level syscalls.
 - **`void programTrapHandler()`** / **`void tlbExceptionHandler()`**
-  - Thin wrappers that call `passUpOrDie()` with the appropriate exception type index.
+  - Wrappers that call `passUpOrDie()` with the appropriate exception type index.
 
 ### 4.5. Interrupt Handling (phase2/interrupts.c)
 
@@ -422,3 +427,25 @@ instead they call `scheduler()` to dispatch another process.
 - **`static pcb_t *findProcessByPid(pcb_t *root, int pid)`**
   - Recursively searches the process tree rooted at `root` for a process with the given PID.
   - Returns a pointer to the matching PCB, or `NULL` if not found.
+
+## 5. Emulator Configuration Notes
+
+### TLB Floor Address (`config_machine.json`)
+
+The `tlb-floor-address` field in `config_machine.json` is set to `"0x80000000"`:
+
+```json
+"tlb-floor-address": "0x80000000"
+```
+
+This value defines the boundary below which virtual addresses bypass the TLB and are
+translated directly (identity-mapped to physical memory). In uRISCV, address `0x80000000`
+is the start of **KSEG0** - the kernel segment where the nucleus code and data are loaded.
+
+By setting the TLB floor to `0x80000000`, all kernel addresses (which live in KSEG0) are
+accessed without TLB lookup. Only addresses above this threshold go through TLB translation.
+This is essential because the kernel must be able to execute before any TLB entries are set
+up - at boot time, during exception handling, and whenever the TLB is being refilled.
+
+The previous default value was `0xFFFFFFFF`, which meant all addresses would go through the
+TLB.

@@ -10,8 +10,7 @@
 #include "./headers/scheduler.h"
 #include "./headers/syscalls.h"
 
-/* Pseudo-clock semaphore index */
-#define PSEUDOCLOCK_SEM (SEMDEVLEN - 1)
+#define PSEUDOCLOCK_SEM      (SEMDEVLEN - 1)            /* Pseudo-clock semaphore index */
 
 /* Device register layout constants */
 #define DEV_REG_SIZE    0x10    /* Size of a single device register (16 bytes) */
@@ -20,7 +19,6 @@
 #define TRANSM_CMD_OFF  0x0C    /* Offset of transm_command within a terminal device register */
 #define TERM_SEM_START  (4 * DEVPERINT)  /* First semaphore index for terminal devices (32) */
 
-/* Helper functions declarations */
 static void terminateRecursive(pcb_t *proc);
 static pcb_t *findProcessByPid(pcb_t *root, int pid);
 static inline void updateCurrentProcessState();
@@ -41,7 +39,7 @@ void createProcess(state_t *statep, int prio, support_t *supportp) {
         return;
     }
 
-    /* Init new process */
+    /* Initialize new process */
     copyState(&newProc->p_s, statep);
     newProc->p_prio = prio;
     newProc->p_supportStruct = supportp;
@@ -71,8 +69,7 @@ void terminateProcess(int pid) {
     } else {
         target = findProcessByPid(rootProcess, pid);
 
-        /* Process not found, return to caller */
-        if (target == NULL) {
+        if (target == NULL) { /* Process not found, return to caller */
             state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
             LDST(exceptionState);
             return;
@@ -96,14 +93,14 @@ void terminateProcess(int pid) {
     /* Update CPU time if current process is being terminated */
     if (currentDies) {
         cpu_t currentTOD;
-        STCK(currentTOD);
-        currentProcess->p_time += (currentTOD - startTOD);
+        STCK(currentTOD);   /* Read TOD clock and store its value in currentTOD */
+        currentProcess->p_time += (currentTOD - startTOD); /* CPU time passed since last dispatch */
     }
 
     /* Remove target from parent's children list */
     outChild(target);
 
-    terminateRecursive(target);
+    terminateRecursive(target); /* Terminate process and its progeny */
 
     if (currentDies) {
         currentProcess = NULL;
@@ -150,7 +147,7 @@ void verhogen(int *semaddr) {
     }
 
     LDST(exceptionState);
-} 
+}
 
 /*
  * NSYS5 - DoIO
@@ -161,8 +158,8 @@ void verhogen(int *semaddr) {
 void doIO(int *commandAddr, int commandValue) {
     /* Determine which device semaphore corresponds to this command address.
      * Device registers start at START_DEVREG (0x10000054).
-     * Each device register is 0x10 bytes.
-     * Lines 3-7 have 8 devices each, with 0x80 bytes per line.
+     * Each device register is DEV_REG_SIZE (0x10) bytes.
+     * Lines 3-7 have 8 devices each, with DEV_LINE_SIZE (0x80) bytes per line.
      *
      * For non-terminal devices, the command field is at offset 0x04.
      * For terminal devices:
@@ -183,20 +180,20 @@ void doIO(int *commandAddr, int commandValue) {
     int semIndex;
     if (intLineNo == TERM_LINE_NO) {
         /* Determine transmit vs receive from offset */
-        unsigned int withinDev = offset % DEV_REG_SIZE;
-        if (withinDev == TRANSM_CMD_OFF) {
+        unsigned int withinDevOffset = offset % DEV_REG_SIZE;
+        if (withinDevOffset == TRANSM_CMD_OFF) { /* transmit */
             semIndex = TERM_SEM_START + devNo;
-        } else {
+        } else {                                 /* receive */
             semIndex = TERM_SEM_START + DEVPERINT + devNo;
         }
     } else {
         semIndex = (intLineNo - 3) * DEVPERINT + devNo;
     }
 
-    /* Block current process */
-    updateCurrentProcessState();
-
-    /* P on device semaphore: always block unconditionally, no value check needed, different logic from `passeren()`. */
+    /* P on device semaphore.
+     * Different logic from `passeren()`: always block unconditionally, must write command
+     * to device register before calling scheduler, and must increment softBlockCount. */
+    updateCurrentProcessState(); 
     deviceSemaphores[semIndex]--;
     insertBlocked(&deviceSemaphores[semIndex], currentProcess);
     softBlockCount++;
@@ -228,7 +225,9 @@ void getCPUTime() {
  * Blocks the current process on the pseudo-clock semaphore.
  */
 void waitForClock() {
-    /* P on pseudo-clock semaphore */
+    /* P on pseudo-clock semaphore.
+     * Different logic from `passeren()`: always block unconditionally,
+     * and must increment softBlockCount. */
     updateCurrentProcessState();
     deviceSemaphores[PSEUDOCLOCK_SEM]--;
     insertBlocked(&deviceSemaphores[PSEUDOCLOCK_SEM], currentProcess);
@@ -252,6 +251,7 @@ void getSupportData() {
  * NSYS9 - GetProcessID
  * Returns the PID of the current process (if parent==0) or
  * the PID of the parent process (if parent!=0).
+ * Note: `parent` is just a flag.
  */
 void getProcessID(int parent) {
     state_t *exceptionState = GET_EXCEPTION_STATE_PTR(0);
@@ -260,7 +260,7 @@ void getProcessID(int parent) {
         exceptionState->reg_a0 = currentProcess->p_pid;
     } else {
         if (currentProcess->p_parent == NULL) {
-            exceptionState->reg_a0 = 0;         /* Root has not parent */
+            exceptionState->reg_a0 = 0;         /* Root has no parent */
         } else {
             exceptionState->reg_a0 = currentProcess->p_parent->p_pid;
         }
@@ -343,7 +343,7 @@ static void terminateRecursive(pcb_t *proc) {
  * Returns NULL if not found.
  */
 static pcb_t *findProcessByPid(pcb_t *root, int pid) {
-    if (root == NULL) return NULL;
+    if (root == NULL)       return NULL;
     if (root->p_pid == pid) return root;
 
     /* Search children */

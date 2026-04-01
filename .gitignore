@@ -1,3 +1,8 @@
+# CMake build, term0, ds store
+build/
+term0.uriscv
+.DS_Store
+
 # Prerequisites
 *.d
 
@@ -5,7 +10,7 @@
 *.o
 *.ko
 *.obj
-*.elf
+*.elf``
 
 # Linker output
 *.ilk
