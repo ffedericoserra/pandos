@@ -439,7 +439,7 @@ The `tlb-floor-address` field in `config_machine.json` is set to `"0x80000000"`:
 ```
 
 This value defines the boundary below which virtual addresses bypass the TLB and are
-translated directly (identity-mapped to physical memory). In uRISCV, address `0x80000000`
+translated directly (mapped to physical memory). In uRISCV, address `0x80000000`
 is the start of **KSEG0** - the kernel segment where the nucleus code and data are loaded.
 
 By setting the TLB floor to `0x80000000`, all kernel addresses (which live in KSEG0) are
