@@ -281,9 +281,9 @@ void yield() {
         LDST(exceptionState);
     } else {
         updateCurrentProcessState();
-        /* We are using list_add_tail instead of insertProcQ to ensure the process
-         * is placed at the back of the queue regardless of priority. */
-        list_add_tail(&currentProcess->p_list, &readyQueue);  
+        /* insertProcQ places the process after all equal-priority processes but
+         * before any lower-priority ones, preserving its priority class. */
+        insertProcQ(&readyQueue, currentProcess);
         currentProcess = NULL;
         scheduler();
     }
