@@ -1,7 +1,7 @@
 #$Id: Makefile,v 1.2 2004/05/01 14:53:48 morsiani Exp morsiani $
 # Makefile for mipsel-linux
 #
-XT_PRG_PREFIX = riscv32-unknown-linux-gnu-
+XT_PRG_PREFIX = riscv64-unknown-elf-
 CC = $(XT_PRG_PREFIX)gcc
 LD = $(XT_PRG_PREFIX)ld
 AS = $(XT_PRG_PREFIX)as
@@ -12,10 +12,10 @@ OBJDUMP = $(XT_PRG_PREFIX)objdump
 URISCV_DIR_PREFIX = /usr/local
 
 URISCV_DATA_DIR = $(URISCV_DIR_PREFIX)/share/uriscv
-URISCV_INCLUDE_DIR = $(URISCV_DIR_PREFIX)/include
+URISCV_INCLUDE_DIR = /usr/include
 URISCV_LIB_DIR = $(URISCV_DIR_PREFIX)/lib/uriscv
 
-TDEFS = test/print.h test/tconst.h $(URISCV_INCLUDE_DIR)/uriscv/liburiscv.e Makefile
+TDEFS = h/print.h h/tconst.h Makefile
 
 # CFLAGS = -ffreestanding -ansi -c -mips1 -mabi=32 -mfp32 -mno-gpopt -G 0 -I$(URISCV_INCLUDE_DIR) -std=gnu99 -fno-pic -mno-abicalls
 CFLAGS_LANG = -ffreestanding -static -c -nostdlib
