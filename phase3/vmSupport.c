@@ -24,8 +24,8 @@
 extern pcb_t *currentProcess;
 
 /* Swap-pool table: one slot per RAM frame in [SWAPPOOLSTART, SWAPPOOLSTART + POOLSIZE*PAGESIZE). */
-static swap_t swapPool[POOLSIZE];
-int           swapMutex;
+swap_t swapPool[POOLSIZE];
+int    swapMutex;
 static int    fifoNext;
 
 /* (VPN - 0x80000) mod 32 maps text/data 0x80000..0x8001E to slots 0..30

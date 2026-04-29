@@ -27,14 +27,19 @@
 
 #include "headers/sysSupport.h"
 #include "headers/initProc.h"
+#include "headers/vmSupport.h"
 
 /* Terminal 0 device register block (line IL_TERMINAL=21, devNo=0). */
 #define TERM0_ADDR ((termreg_t *)(START_DEVREG + (21 - 17) * 0x80))
 
+#define SHELL_ASID 1
+
 static void doSys2(support_t *sup);
 static void doSys4(support_t *sup, state_t *st);
 static void doSys5(support_t *sup, state_t *st);
+static void doSys6(support_t *sup, state_t *st);
 static int  validUserAddr(memaddr a);
+static void resetUprocResources(int asid);
 
 void programTrap(support_t *sup) {
     if (sup->sup_asid == 1) {
@@ -68,8 +73,7 @@ void supportGeneralHandler(void) {
         doSys5(sup, st);
         return;
     case EXECUTE:
-        /* M4 will plug the real handler in here. For now: trap. */
-        programTrap(sup);
+        doSys6(sup, st);
         return;
     default:
         programTrap(sup);
@@ -113,6 +117,60 @@ static void doSys4(support_t *sup, state_t *st) {
     SYSCALL(VERHOGEN, (int)&termWrSem, 0, 0);
 
     st->reg_a0 = (unsigned int)retval;
+    st->pc_epc += WORDLEN;
+    LDST(st);
+}
+
+/* Erase any swap-pool entries owned by `asid` and reset that ASID's page
+ * table back to V=0. Run before re-spawning a U-proc on the same ASID
+ * so the Pager doesn't write fresh-process data over the flash backing
+ * store thinking those frames still belong to the previous incarnation. */
+static void resetUprocResources(int asid) {
+    SYSCALL(PASSEREN, (int)&swapMutex, 0, 0);
+    for (int i = 0; i < POOLSIZE; i++) {
+        if (swapPool[i].sw_asid == asid) {
+            swapPool[i].sw_asid = NOPROC;
+            swapPool[i].sw_pte  = NULL;
+        }
+    }
+    /* Best-effort TLB invalidation: TLBCLR drops every entry, which is
+     * cheap-enough at EXECUTE granularity and avoids stale ASID hits. */
+    TLBCLR();
+    SYSCALL(VERHOGEN, (int)&swapMutex, 0, 0);
+
+    pteEntry_t *pt = supports[asid - 1].sup_privatePgTbl;
+    for (int i = 0; i < MAXPAGES; i++) {
+        pt[i].pte_entryLO = DIRTYON; /* V=0, D=1, G=0 */
+    }
+}
+
+static void doSys6(support_t *sup, state_t *st) {
+    if (sup->sup_asid != SHELL_ASID) { programTrap(sup); return; }
+
+    int asid = (int)st->reg_a1;
+    if (asid < 2 || asid > UPROCMAX) { programTrap(sup); return; }
+
+    resetUprocResources(asid);
+
+    /* Refresh the initial state in case a previous incarnation left
+     * stale GPRs (initUprocState is the same routine InstantiatorProcess
+     * uses; we re-import the bits we need here without the helper). */
+    state_t *us = &uprocStates[asid - 1];
+    us->entry_hi = (unsigned int)asid << ASIDSHIFT;
+    us->cause    = 0;
+    us->status   = MSTATUS_MPP_U | MSTATUS_MPIE_MASK;
+    us->pc_epc   = UPROCSTARTADDR;
+    us->mie      = MIE_ALL;
+    for (int i = 0; i < STATE_GPR_LEN; i++) us->gpr[i] = 0;
+    us->reg_s9 = UPROCSTARTADDR;
+    us->reg_sp = USERSTACKTOP;
+
+    SYSCALL(CREATEPROCESS, (int)us, PROCESS_PRIO_LOW, (int)&supports[asid - 1]);
+
+    /* Block the shell until the spawned U-proc terminates. */
+    SYSCALL(PASSEREN, (int)&shellSem, 0, 0);
+
+    st->reg_a0 = 0;
     st->pc_epc += WORDLEN;
     LDST(st);
 }
