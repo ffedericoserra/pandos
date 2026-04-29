@@ -28,9 +28,23 @@ The development of PandOSsh is divided into three distinct phases:
   - It relies on the uRISCV BIOS for low-level exception routing, processor state
     save/restore, and hardware timer access.
 - **Phase 3: The Support Level**
-  - TBD
+  - This phase implements Level 4 of the architecture.
+  - It layers virtual memory and user-space I/O on top of the Nucleus: each
+    U-proc gets a 32-entry private page table backed by its own flash device,
+    its text/data/stack live in kuseg `[0x80000000, 0xC0000000)`, and it
+    reaches the kernel only through SYSCALLs. The Support level provides
+    the Pager (a FIFO-replaced swap pool of 16 frames at `0x20020000`),
+    the TLB-Refill handler, four user-callable services
+    (`SYS2 TERMINATE`, `SYS4 WRITETERMINAL`, `SYS5 READTERMINAL`,
+    `SYS6 EXECUTE`), an orderly Program Trap path, and an
+    `InstantiatorProcess` that launches an interactive shell U-proc.
+  - It relies on Phase 2's `passUpOrDie` mechanism for routing
+    TLB-Invalid and program-trap exceptions into the per-U-proc
+    Support structure, and on the Nucleus syscalls (NSYS1, NSYS2,
+    NSYS3, NSYS4, NSYS5, NSYS8) for process management, semaphore
+    operations, and device I/O.
 
-This document specifically details the implementation and architecture of Phase 1 and Phase 2.
+This document details the implementation and architecture of all three phases.
 
 ## 2. Repository Structure
 
@@ -56,9 +70,20 @@ code, and phase-specific implementations.
   - `exceptions.c`, `headers/exceptions.h`: Exception dispatcher and pass-up-or-die mechanism.
   - `interrupts.c`, `headers/interrupts.h`: Device and timer interrupt handling.
   - `syscalls.c`, `headers/syscalls.h`: Nucleus system call implementations (NSYS1-10).
-  - `p2test.c`: The provided test code to verify the functionality of Phase 2 modules.
+  - `p2test.c`: Phase 2 standalone test program. Excluded from the Phase 3 kernel build (the Phase 3 `InstantiatorProcess` and `uTLB_RefillHandler` symbols replace the placeholders that lived here).
+- **phase3/**: Contains the source code specific to Phase 3 (Support Level).
+  - `initProc.c`, `headers/initProc.h`: `InstantiatorProcess` (replaces the Phase 2 `test`). Initialises the swap pool, the support-level mutex/sync semaphores, the per-U-proc Support structures, and launches the shell U-proc.
+  - `vmSupport.c`, `headers/vmSupport.h`: TLB-Refill handler, the Pager, the swap pool table, `flashOp()`.
+  - `sysSupport.c`, `headers/sysSupport.h`: Support-level general exception handler (dispatches SYS2/4/5/6) and `programTrap()`.
+- **testers/**: User-space programs that ship as flash-device images.
+  - `shell.c`: REPL that maps command names to ASIDs and spawns children via `SYS6 EXECUTE`.
+  - `calc.c`: One-shot single-digit calculator.
+  - `echo.c`, `fibEight.c`, `fibEleven.c`, `uname.c`, `date.c`, `sl.c`: Provided testers exercising SYS4/SYS5 and the paging path.
+  - `print.c`, `h/print.h`, `h/tconst.h`: Shared print wrapper and user-side syscall numbers.
+  - `Makefile`: builds each `.c` into a `.uriscv` flash image via `riscv64-unknown-elf-gcc` + `uriscv-elf2uriscv` + `uriscv-mkdev`.
 - `CMakeLists.txt`: The root configuration file for the build system.
-- `config_machine.json`: Configuration file for the uRISCV emulator.
+- `config_machine.json`: uRISCV emulator configuration for the Phase 1/2 standalone tests.
+- `config_machine_phase3.json`: uRISCV emulator configuration for Phase 3 (256 RAM frames, eight flash devices mapped to the `testers/*.uriscv` images at ASID 1..8, terminal0 enabled).
 - `klog.c`: A utility library for circular log buffering.
 
 ## 3. Module Reference: Phase 1
@@ -428,11 +453,232 @@ instead they call `scheduler()` to dispatch another process.
   - Recursively searches the process tree rooted at `root` for a process with the given PID.
   - Returns a pointer to the matching PCB, or `NULL` if not found.
 
-## 5. Emulator Configuration Notes
+## 5. Module Reference: Phase 3
 
-### TLB Floor Address (`config_machine.json`)
+Phase 3 implements the Support Level on top of the Nucleus. It is composed of three
+modules: `initProc.c` (`InstantiatorProcess` and shared globals), `vmSupport.c` (TLB-Refill
+handler, Pager, swap pool, flash I/O), and `sysSupport.c` (Support-level general exception
+handler with the four user-callable services and `programTrap`). Together they provide
+on-demand paging from a per-U-proc flash backing store, the four Support-level syscalls
+(`SYS2 TERMINATE`, `SYS4 WRITETERMINAL`, `SYS5 READTERMINAL`, `SYS6 EXECUTE`), an
+interactive shell U-proc, and an orderly termination path on program traps.
 
-The `tlb-floor-address` field in `config_machine.json` is set to `"0x80000000"`:
+### 5.1. Per-U-Proc Address Space and Flash Layout
+
+Each U-proc lives in **kuseg** `[0x80000000, 0xC0000000)`:
+
+- Logical pages 0..30 hold `.text`/`.data`. VPN range `0x80000..0x8001E`.
+- Logical page 31 holds the stack. VPN `0xBFFFF`. SP starts at `0xC0000000` and grows
+  downward.
+- Each U-proc has a **32-entry private page table** (`sup_privatePgTbl`). Page 31 lives in
+  slot 31; the formula `(VPN - 0x80000) mod 32` maps both regions naturally.
+- Each U-proc has a **dedicated flash device** (one per ASID). Flash blocks 0..30 hold the
+  text/data pages, block 31 holds the stack page. The flash images are produced by
+  `testers/Makefile` and bound to flash devices in `config_machine_phase3.json`.
+- ASIDs are in `[1..UPROCMAX]` (UPROCMAX=8). ASID 1 is reserved for the shell. ASID 0 is
+  reserved for kernel daemons (no U-proc uses it).
+
+### 5.2. Swap Pool
+
+The swap pool is a contiguous region of `POOLSIZE = 2*UPROCMAX = 16` physical frames
+starting at `SWAPPOOLSTART = RAMSTART + OSFRAMES*PAGESIZE = 0x20020000`. The
+**swap pool table** (`swapPool[POOLSIZE]`, `swap_t` entries) records which `(ASID, page,
+PTE pointer)` triple currently occupies each frame, with `sw_asid = NOPROC` marking a
+free slot. All accesses are serialised by `swapMutex` (initialised to 1).
+
+### 5.3. TLB-Refill Handler (`vmSupport.c`)
+
+`uTLB_RefillHandler` is invoked directly by the BIOS pass-up vector on every TLB miss
+whose target PTE has `V=1` (i.e. the page is resident). It runs on the Nucleus stack with
+interrupts disabled, must complete quickly, and cannot block.
+
+**Algorithm:**
+1. Read the saved exception state at `BIOSDATAPAGE`. Extract the faulting VPN from
+   `entry_hi & GETPAGENO`.
+2. Compute the page-table slot via `(VPN - 0x80000) & (MAXPAGES-1)`.
+3. Look up the PTE in `currentProcess->p_supportStruct->sup_privatePgTbl[slot]`.
+4. Write the PTE into the TLB with `setENTRYHI`/`setENTRYLO`/`TLBWR` (the BIOS picks the
+   victim TLB slot).
+5. `LDST` back to the saved exception state to retry the instruction.
+
+If the PTE has `V=0` instead, the BIOS raises a TLB-Invalid exception, which the Nucleus
+routes through `passUpOrDie(PGFAULTEXCEPT)` to the Pager.
+
+### 5.4. The Pager (`vmSupport.c`)
+
+`pager()` is the entry point referenced by `sup_exceptContext[PGFAULTEXCEPT].pc`. It runs
+in M-mode with interrupts on, on the U-proc's `sup_stackTLB`. It implements the
+fourteen-step flow from the Phase 3 specification:
+
+1. Recover the Support pointer (`SYS8 GETSUPPORTPTR`) and the saved state
+   `&sup->sup_exceptState[PGFAULTEXCEPT]`.
+2. If the cause is `EXC_MOD` (TLB-Modification), delegate to `programTrap` — no swap-pool
+   work happens.
+3. `PASSEREN` `swapMutex`.
+4. Extract the faulting page number (same `(VPN - 0x80000) mod 32` mapping as the
+   refill handler).
+5. **Pick a frame** with the §10 free-frame fast path: scan `swapPool` for any slot with
+   `sw_asid == NOPROC`; if none, fall back to a static round-robin counter `fifoNext`,
+   incremented modulo `POOLSIZE`.
+6. **If the chosen frame is occupied**: atomically (interrupts off via `MSTATUS_MIE_MASK`)
+   clear `V` on the previous owner's PTE and `TLBCLR` to drop any stale TLB caching, then
+   write the frame back to the previous owner's flash device.
+7. **Read the missing page** from the current U-proc's flash into the frame.
+8. Update the swap-pool entry with `(ASID, page, PTE pointer)`.
+9. Atomically: set the PTE to `frameAddr | DIRTYON | VALIDON` and `TLBCLR`.
+10. `VERHOGEN` `swapMutex`.
+11. `LDST` back to the saved exception state.
+
+On any flash-device error (status word's low byte ≠ `DEV_READY`), the Pager releases
+`swapMutex` and delegates to `programTrap` so the U-proc terminates cleanly without
+leaking the mutex.
+
+### 5.5. Flash I/O (`vmSupport.c`)
+
+`int flashOp(asid, blockNo, frameAddr, isWrite)` wraps the device-register protocol:
+
+1. `PASSEREN` `flashSem[asid-1]` (per-flash-device mutex, initialised to 1).
+2. Write `frameAddr` into the flash device's `data0` register.
+3. `SYS5 DOIO` with the device's `command` register and the encoded command
+   `(blockNo << 8) | (isWrite ? FLASHWRITE : FLASHREAD)`. The Nucleus blocks the calling
+   U-proc on the device sync semaphore until the interrupt handler V's it with the device
+   status.
+4. `VERHOGEN` `flashSem[asid-1]`.
+5. Return the device status.
+
+The flash device address for ASID *i* is computed as
+`START_DEVREG + (IL_FLASH - IL_DISK) * 0x80 + (i-1) * 0x10`, i.e. `0x100000D4` for ASID 1.
+
+### 5.6. Support-Level General Exception Handler (`sysSupport.c`)
+
+`supportGeneralHandler()` is the entry point referenced by
+`sup_exceptContext[GENERALEXCEPT].pc`. It runs in M-mode on `sup_stackGen`. The Nucleus
+delivers here every non-TLB exception that targets a U-proc with a non-`NULL`
+`p_supportStruct` (program traps, ECALLs from U-mode, the simulated `PRIVINSTR` cause
+the Nucleus raises when a U-proc tries a kernel-mode negative SYSCALL).
+
+**Algorithm:**
+1. Recover the Support pointer (`SYS8`) and the saved state
+   `&sup->sup_exceptState[GENERALEXCEPT]`.
+2. If `(cause & CAUSE_EXCCODE_MASK)` is neither `EXC_ECU` nor `EXC_ECM`, dispatch to
+   `programTrap`.
+3. Otherwise dispatch on `reg_a0`:
+
+   | a0 | Service | Notes |
+   |---|---|---|
+   | 2 (`TERMINATE`) | `doSys2` | Orderly termination via `programTrap` |
+   | 4 (`WRITETERMINAL`) | `doSys4` | Validates `a1 ∈ kuseg`, `0 ≤ a2 ≤ MAXSTRLENG`; loops chars over `termWrSem` |
+   | 5 (`READTERMINAL`) | `doSys5` | Validates `a1 ∈ kuseg`; loops over `termRdSem` until `\n` or `MAXSTRLENG` |
+   | 6 (`EXECUTE`) | `doSys6` | Shell-only spawn of a U-proc by ASID |
+   | other | — | `programTrap` |
+
+#### `doSys4 / WRITETERMINAL`
+
+Holds `termWrSem`. For each character `c` in `[a1, a1+a2)`, issues
+`SYS5 DOIO` against terminal 0's `transm_command` with command word
+`TRANSMITCHAR | (c << 8)`. Stops on the first device error and returns the negated low
+status byte; on full success returns the count. Releases `termWrSem`. The handler bumps
+`pc_epc` by `WORDLEN` before `LDST` so the U-proc resumes past the `ECALL`.
+
+#### `doSys5 / READTERMINAL`
+
+Holds `termRdSem`. Issues `SYS5 DOIO` against terminal 0's `recv_command` with command
+word `RECEIVECHAR`. The returned status word holds the received character in bits 15:8
+and the device status in bits 7:0; on `CHARRECV` (5) the byte is appended to the user
+buffer until `\n` or `MAXSTRLENG`. Returns the count or the negated low status byte on
+device error; releases `termRdSem`; bumps PC; `LDST`.
+
+#### `doSys6 / EXECUTE`
+
+Refuses unless the calling U-proc is the shell (`sup_asid == 1`). Validates
+`a1 ∈ [2, UPROCMAX]`. Calls `resetUprocResources(asid)`, which under `swapMutex`
+clears every `swapPool` slot with `sw_asid == asid`, issues a `TLBCLR` to drop stale
+entries, and re-zeroes `V` on every PTE in `supports[asid-1].sup_privatePgTbl`. This is
+the load-bearing step for *re-spawning* an ASID: without it the Pager would later write
+fresh-process data over the flash image of the previous incarnation. The handler then
+re-imports the U-proc initial state into `uprocStates[asid-1]`, calls `SYS1 CREATEPROCESS`,
+and `PASSEREN`s `shellSem` to block the shell until the child terminates. On resume it
+returns 0 in `a0`, bumps PC, `LDST`s.
+
+### 5.7. Program Trap (`sysSupport.c`)
+
+`programTrap(sup)` performs the orderly termination dance. It V's `masterSem` if the
+victim is the shell (so `InstantiatorProcess` wakes from its `PASSEREN`) and `shellSem`
+otherwise (so the shell wakes from its `SYS6` block), then issues `SYS2 TERMPROCESS` to
+ask the Nucleus to recursively destroy the U-proc. The Pager releases `swapMutex` itself
+on flash error before delegating here so this routine does not need to track that ownership.
+
+### 5.8. InstantiatorProcess (`initProc.c`)
+
+The Nucleus boots a single root process (`phase2/init.c`) whose entry point is `test`. In
+Phase 3 that symbol is provided by `initProc.c`:
+
+```c
+void test(void) {
+    initSwapStructs();
+    /* init mutex (init to 1) and sync (init to 0) semaphores */
+    masterSem = 0; shellSem = 0;
+    termRdSem = 1; termWrSem = 1;
+    for (i in 0..7) flashSem[i] = 1;
+    /* build supports[i] and uprocStates[i] for i in 1..UPROCMAX */
+    SYSCALL(CREATEPROCESS, &uprocStates[0], LOW, &supports[0]); /* shell only */
+    SYSCALL(PASSEREN, &masterSem, 0, 0);                        /* wait for shell exit */
+    SYSCALL(TERMPROCESS, 0, 0, 0);                              /* halts: process count → 0 */
+}
+```
+
+Each `support_t` is initialised with:
+
+- `sup_asid = i`
+- A 32-entry page table whose `entry_hi` carries the right VPN+ASID and whose `entry_lo`
+  starts with `D=1, V=0, G=0` (page is dirty-allowed, not-present, ASID-private).
+- `sup_exceptContext[PGFAULTEXCEPT]` with PC = `pager`,
+  SP = `&sup_stackTLB[499]`, status = M-mode + MIE on.
+- `sup_exceptContext[GENERALEXCEPT]` with PC = `supportGeneralHandler`,
+  SP = `&sup_stackGen[499]`, same status.
+
+Each `state_t uprocStates[i]` is initialised with PC = s9 = `UPROCSTARTADDR` (`0x800000B0`),
+SP = `USERSTACKTOP` (`0xC0000000`), `entry_hi.ASID = i`, status = U-mode + MPIE,
+mie = `MIE_ALL`.
+
+### 5.9. Shell U-Proc (`testers/shell.c`)
+
+The shell runs as ASID 1 (flash0). Its loop is:
+
+1. Print `$ ` via `SYS4`.
+2. Read a line via `SYS5`.
+3. Strip the trailing `\n`.
+4. If `exit`, break.
+5. Otherwise look the command up in a static `{name → asid}` table that mirrors the
+   flash assignment in `config_machine_phase3.json` (`fibEight=2`, `echo=3`,
+   `fibEleven=4`, `uname=5`, `date=6`, `sl=7`, `calc=8`).
+6. Issue `SYS6 EXECUTE asid`. The handler blocks the shell on `shellSem` until the child
+   terminates with `SYS2`.
+7. Loop.
+
+After `exit`, the shell prints `bye` and `SYS2`-terminates. `programTrap` V's
+`masterSem`; `InstantiatorProcess` wakes; the kernel halts.
+
+### 5.10. Phase 3 Module Cross-Reference
+
+| Symbol | Where defined | Where referenced |
+|---|---|---|
+| `pager` | `vmSupport.c` | PC of every U-proc's `sup_exceptContext[PGFAULTEXCEPT]` |
+| `uTLB_RefillHandler` | `vmSupport.c` | BIOS pass-up vector (`phase2/init.c`) |
+| `flashOp` | `vmSupport.c` | `pager` only |
+| `supportGeneralHandler` | `sysSupport.c` | PC of every U-proc's `sup_exceptContext[GENERALEXCEPT]` |
+| `programTrap` | `sysSupport.c` | `pager`, `supportGeneralHandler`, `doSys2` |
+| `swapPool`, `swapMutex` | `vmSupport.c` | `pager`, `doSys6` (re-spawn cleanup) |
+| `supports[]`, `uprocStates[]` | `initProc.c` | `doSys6` |
+| `masterSem`, `shellSem` | `initProc.c` | `programTrap`, `doSys6`, `InstantiatorProcess` |
+| `termRdSem`, `termWrSem` | `initProc.c` | `doSys4`, `doSys5` |
+| `flashSem[]` | `initProc.c` | `flashOp` |
+
+## 6. Emulator Configuration Notes
+
+### TLB Floor Address (`config_machine.json` and `config_machine_phase3.json`)
+
+The `tlb-floor-address` field is set to `"0x80000000"`:
 
 ```json
 "tlb-floor-address": "0x80000000"
@@ -449,3 +695,19 @@ up - at boot time, during exception handling, and whenever the TLB is being refi
 
 The previous default value was `0xFFFFFFFF`, which meant all addresses would go through the
 TLB.
+
+### Phase 3 Configuration (`config_machine_phase3.json`)
+
+Phase 3 ships its own emulator configuration, distinct from the one used for the Phase
+1/2 standalone tests:
+
+| Field | Value | Why |
+|---|---|---|
+| `num-ram-frames` | 256 | OS (~32 frames) + swap pool (16 frames at `0x20020000`) + headroom |
+| `tlb-size` | 16 | Standard µRISCV TLB |
+| `tlb-floor-address` | `0x80000000` | Above the kernel; only kuseg goes through TLB |
+| `flash0`..`flash7` | `testers/{shell,fibEight,echo,fibEleven,uname,date,sl,calc}.uriscv` | One image per ASID 1..8 |
+| `terminal0` | `term0.uriscv` (enabled) | Shell prompt + tester I/O |
+
+`flash7` (calc) ships disabled in the JSON; flip its `enabled` flag to use the calculator
+program from the shell.
