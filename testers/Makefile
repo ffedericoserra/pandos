@@ -13,7 +13,7 @@ URISCV_DIR_PREFIX = /usr/local
 
 URISCV_DATA_DIR = $(URISCV_DIR_PREFIX)/share/uriscv
 URISCV_INCLUDE_DIR = /usr/include
-URISCV_LIB_DIR = $(URISCV_DIR_PREFIX)/lib/uriscv
+URISCV_LIB_DIR = /usr/lib/uriscv
 
 TDEFS = h/print.h h/tconst.h Makefile
 
