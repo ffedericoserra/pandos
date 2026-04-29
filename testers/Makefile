@@ -22,8 +22,8 @@ CFLAGS_LANG = -ffreestanding -static -c -nostdlib
 CFLAGS = $(CFLAGS_LANG) -I$(URISCV_INCLUDE_DIR) -Wall -O0 -march=rv32imfd -mabi=ilp32d
 # -Wall
 
-LDAOUTFLAGS = -G 0 -nostdlib -T $(URISCV_DATA_DIR)/uriscvaout.ldscript
-LDCOREFLAGS = -G 0 -nostdlib -T $(URISCV_DATA_DIR)/uriscvcore.ldscript
+LDAOUTFLAGS = -G 0 -nostdlib -melf32lriscv -T $(URISCV_DATA_DIR)/uriscvaout.ldscript
+LDCOREFLAGS = -G 0 -nostdlib -melf32lriscv -T $(URISCV_DATA_DIR)/uriscvcore.ldscript
 
 # AS = mipsel-linux-gnu-as -KPIC
 
