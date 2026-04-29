@@ -223,6 +223,19 @@
 
 #define UPROCMAX 8
 #define POOLSIZE (UPROCMAX * 2)
+
+/* Phase 3 memory layout */
+#define SWAPPOOLSTART (RAMSTART + OSFRAMES * PAGESIZE) /* 0x20020000 */
+#define KUSEGSTART    0x80000000
+#define KUSEGEND      0xC0000000
+#define UPROCSTACKBASE 0xBFFFF000  /* VPN of stack page = 0xBFFFF */
+
+/* Support-level syscall numbers (mirror testers/h/tconst.h) */
+#define READTERMINAL 5
+#define EXECUTE      6
+
+/* Device status (READY = success after a flash/disk DOIO) */
+#define DEV_READY 1
 /* End of Mikeyg constants */
 
 #define CHARRECV			5		/* Character received*/

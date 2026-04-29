@@ -16,7 +16,7 @@ add_executable(MultiPandOS
     ./klog.c phase1/pcb.c phase1/asl.c
     phase2/init.c phase2/exceptions.c phase2/interrupts.c
     phase2/scheduler.c phase2/syscalls.c
-    phase3/initProc.c phase3/vmSupport.c
+    phase3/initProc.c phase3/vmSupport.c phase3/sysSupport.c
     ${URISCV_SRC}/crtso.S ${URISCV_SRC}/liburiscv.S)
 
 add_custom_target(
