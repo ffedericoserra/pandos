@@ -13,6 +13,7 @@
 
 #include <uriscv/liburiscv.h>
 #include <uriscv/types.h>
+#include <uriscv/cpu.h>
 
 #include "../headers/types.h"
 #include "../headers/const.h"
