@@ -39,8 +39,8 @@ void scheduler(){
         // Record start time for CPU time accounting
         STCK(startTOD);
 
-        // Carica il PLT con il time slice (5 millisecondi)
-        setTIMER(TIMESLICE);
+        // Carica il PLT con il time slice (5 millisecondi), scalato in cicli di clock
+        setTIMER(TIMESLICE * (*((cpu_t *)TIMESCALEADDR)));
         
         // Ripristina lo stato del processore caricando i registri dal PCB 
         LDST(&(currentProcess->p_s));
