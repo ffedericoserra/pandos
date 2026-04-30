@@ -3,12 +3,8 @@
 
 #include "../../headers/types.h"
 
-/* Entry point referenced by sup_exceptContext[GENERALEXCEPT].pc */
-void supportGeneralHandler(void);
-
-/* Orderly U-proc termination. Releases support-level sync semaphores
- * (masterSem if shell, shellSem if child) before SYS2. The Pager
- * releases swapMutex itself before delegating here on flash error. */
+/* Support-level general exception handler */
+void supportGeneralHandler();
 void programTrap(support_t *sup);
 
 #endif
