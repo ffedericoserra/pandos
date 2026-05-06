@@ -73,7 +73,6 @@ int main() {
 
     /* Call the Scheduler */
     scheduler();
-
     /* Should never reach here */
     return 0;
 }

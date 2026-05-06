@@ -5,12 +5,14 @@ set(XT_PRG_PREFIX riscv64-unknown-elf-)
 set(URISCV_SRC /usr/local/share/uriscv)
 set(URISCV_INC /usr/include)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_COMPILER ${XT_PRG_PREFIX}gcc)
 set(CMAKE_ASM_COMPILER ${XT_PRG_PREFIX}gcc)
 set(CMAKE_C_LINKER ${XT_PRG_PREFIX}ld)
 
 add_link_options(-nostdlib -T ${URISCV_SRC}/uriscvcore.ldscript -march=rv32imfd)
 add_compile_options(-ffreestanding -static -nostartfiles -nostdlib -I${URISCV_INC} -ggdb -Wall -O0 -std=gnu99 -march=rv32imafd -mabi=ilp32d)
+include_directories(/usr/include)
 
 add_executable(MultiPandOS
     ./klog.c phase1/pcb.c phase1/asl.c
