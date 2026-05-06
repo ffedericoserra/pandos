@@ -40,7 +40,7 @@ void scheduler(){
         STCK(startTOD);
 
         // Carica il PLT con il time slice (5 millisecondi)
-        setTIMER(TIMESLICE);
+        setTIMER(TIMESLICE*TIMESCALEADDR);
         
         // Ripristina lo stato del processore caricando i registri dal PCB 
         LDST(&(currentProcess->p_s));
