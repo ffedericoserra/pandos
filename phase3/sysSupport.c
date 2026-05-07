@@ -23,6 +23,8 @@ static int validUserAddr(memaddr a);
 static void resetUprocResources(int asid);
 
 
+extern int swapPoolSem;
+extern swap_t swapPool[POOLSIZE]; 
 /*
  * supportGeneralHandler
  * Entry point for every non-TLB exception the Nucleus passes up via
@@ -230,7 +232,7 @@ static int validUserAddr(memaddr a) {
  * any stale TLB entries that might still match the old PTEs.
  */
 static void resetUprocResources(int asid) {
-    SYSCALL(PASSEREN, (int)&swapMutex, 0, 0); /* P(swapMutex) */
+    SYSCALL(PASSEREN, (int)&swapPoolSem, 0, 0); /* P(swapPoolSem) */
     for (int i = 0; i < POOLSIZE; i++) {
         if (swapPool[i].sw_asid == asid) {
             swapPool[i].sw_asid = NOPROC;
@@ -238,7 +240,7 @@ static void resetUprocResources(int asid) {
         }
     }
     TLBCLR(); /* coarse but cheap at EXECUTE granularity */
-    SYSCALL(VERHOGEN, (int)&swapMutex, 0, 0); /* V(swapMutex) */
+    SYSCALL(VERHOGEN, (int)&swapPoolSem, 0, 0); /* V(swapMutex) */
 
     pteEntry_t *pt = supports[asid - 1].sup_privatePgTbl;
     for (int i = 0; i < MAXPAGES; i++) {
