@@ -43,8 +43,8 @@ void pager(void);
  * Exported semaphores (shared with initProc.c / sysSupport.c)
  * ----------------------------------------------------------------------- */
 extern int swapPoolSem;                /* Mutual exclusion on Swap Pool table */
-extern int flashDevSem[DEVPERINT];    /* Per-flash-device mutual exclusion (8) */
-extern int termReadSem;               /* Terminal-0 read mutual exclusion      */
-extern int termWriteSem;              /* Terminal-0 write mutual exclusion     */
+extern int flashSem[UPROCMAX];    /* Per-flash-device mutual exclusion (8) */
+extern int termRdSem;               /* Terminal-0 read mutual exclusion      */
+extern int termWrSem;              /* Terminal-0 write mutual exclusion     */
 
 #endif /* VMSUPPORT_H */
