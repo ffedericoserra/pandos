@@ -43,21 +43,23 @@ To compile and run this project, you need the following tools installed:
 
 The Phase 3 build replaces `phase2/p2test.c` with the Phase 3 modules and additionally produces the user-space binaries that ship as flash-device images.
 
-1. Build the kernel and the testers in one shot:
+1. Build the kernel:
    ```bash
-   rm -rf build/ && cmake -B build && cmake --build build && make -C testers all
+   cmake -B build
+   cmake --build build
    ```
-   This produces:
+2. Build the testers:
+   ```bash
+   make -C testers all
+   ```
+   The two steps together produce:
    * `build/MultiPandOS.core.uriscv` — kernel image
    * `testers/{shell,fibEight,echo,fibEleven,uname,date,sl,calc}.uriscv` — flash-device images, one per ASID
-
-2. Run the emulator with the Phase 3 configuration:
-   ```bash
-   uriscv
-   ```
-   then load `phase3_config_machine.json` under Simulator > Open Configuration.
-
-3. The shell prints `PandOSsh shell` and a `$ ` prompt at Terminal0. Available commands:
+3. Run the emulator:
+   * Start `uriscv`
+   * Load `phase3_config_machine.json` under Simulator > Open Configuration
+   * Power On, then Continue
+4. The shell prints `PandOSsh shell` and a `$ ` prompt at Terminal0. Available commands:
 
    | Command | Effect |
    |---|---|
