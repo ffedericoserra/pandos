@@ -26,11 +26,14 @@ To compile and run this project, you need the following tools installed:
 
 ## Building and Running
 
-### Phase 1 / Phase 2
+Each phase is built by passing a `-DPHASE=PHASEn` option to `cmake`. The default
+(no option) builds Phase 3.
 
-1. Build the kernel:
+### Phase 1
+
+1. Build the kernel with the Phase 1 sources (PCB Manager, ASL Manager, and `p1test.c`):
    ```bash
-   cmake -B build
+   cmake -B build -DPHASE=PHASE1
    cmake --build build
    ```
 2. Run the emulator:
@@ -38,6 +41,18 @@ To compile and run this project, you need the following tools installed:
    * Load `config_machine.json` under Simulator > Open Configuration
    * Power On, then Continue
    * Correct execution prints `System halted` after completing all test iterations, with `p1 finishes OK -- TTFN` visible under Terminal0
+
+### Phase 2
+
+1. Build the kernel with the Phase 2 sources (Phase 1 modules plus the Nucleus and `p2test.c`):
+   ```bash
+   cmake -B build -DPHASE=PHASE2
+   cmake --build build
+   ```
+2. Run the emulator:
+   * Start `uriscv`
+   * Load `config_machine.json` under Simulator > Open Configuration
+   * Power On, then Continue
 
 ### Phase 3
 
