@@ -84,7 +84,7 @@ The Phase 3 build replaces `phase2/p2test.c` with the Phase 3 modules and additi
    | `fibEight`  | recursive Fibonacci(8) — prints success on completion |
    | `fibEleven` | recursive Fibonacci(11) — exercises FIFO eviction in the swap pool |
    | `echo`      | prompts for a string and echoes it back |
-   | `calc`      | one-shot single-digit calculator (`<digit><op><digit>`); flash7 is disabled by default in the JSON, enable it to use |
+   | `calc`      | one-shot single-digit calculator (`<digit><op><digit>`) |
    | `exit`      | terminates the shell, the OS halts cleanly |
 
    Unknown commands print `command not found`.
