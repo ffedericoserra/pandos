@@ -4,6 +4,7 @@
 #claude
 .claude/
 CLAUDE.md
+PHASE3_NOTES.md
 
 # CMake build, term0, ds store
 build/
