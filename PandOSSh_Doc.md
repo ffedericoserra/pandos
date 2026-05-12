@@ -457,12 +457,12 @@ Phase 3 implements the Support Level on top of the Nucleus. It adds virtual
 memory, user programs, an interactive shell, and four user-callable services.
 It is composed of three modules:
 
-- `phase3/initProc.c` — the InstantiatorProcess, which replaces the Phase 2 `test`.
+- `phase3/initProc.c` - the InstantiatorProcess, which replaces the Phase 2 `test`.
   Initialises shared resources (swap pool, semaphores, per-U-proc Support
   structures) and starts the shell.
-- `phase3/vmSupport.c` — the Pager, the TLB-Refill handler, the swap pool table,
+- `phase3/vmSupport.c` - the Pager, the TLB-Refill handler, the swap pool table,
   and the flash I/O helper. Handles all virtual memory work.
-- `phase3/sysSupport.c` — the Support-level general exception handler, the four
+- `phase3/sysSupport.c` - the Support-level general exception handler, the four
   user-callable services (SYS2, SYS4, SYS5, SYS6), and the orderly termination
   path (`programTrap`).
 
@@ -511,12 +511,12 @@ review of `phase3/vmSupport.c`.*
 
 This module provides three pieces of functionality:
 
-- `uTLB_RefillHandler()` — runs on every TLB miss whose target PTE is already
+- `uTLB_RefillHandler()` - runs on every TLB miss whose target PTE is already
   valid. Copies the PTE into the TLB and resumes the U-proc.
-- `pager()` — runs on TLB-Invalid exceptions. Fetches the missing page from the
+- `pager()` - runs on TLB-Invalid exceptions. Fetches the missing page from the
   U-proc's flash device into a swap-pool frame, evicting another frame if
   necessary. Serialises access to the swap pool with `swapPoolSem`.
-- `flashOp()` — wraps the flash device-register protocol for single-block read
+- `flashOp()` - wraps the flash device-register protocol for single-block read
   and write operations.
 
 ### 5.4. Support-Level Exception Handler (phase3/sysSupport.c)
@@ -536,8 +536,8 @@ enabled.
 
     | Cause | Action |
     |---|---|
-    | `EXC_ECU` (8) — ECALL from U-mode | SYSCALL, dispatch on `a0` |
-    | `EXC_ECM` (11) — ECALL from M-mode | SYSCALL, dispatch on `a0` |
+    | `EXC_ECU` (8) - ECALL from U-mode | SYSCALL, dispatch on `a0` |
+    | `EXC_ECM` (11) - ECALL from M-mode | SYSCALL, dispatch on `a0` |
     | Anything else | `programTrap()` |
 
     For SYSCALLs, dispatches on register `a0`:
@@ -550,10 +550,10 @@ enabled.
     | 6 (`EXECUTE`) | SYS6 | `doSys6` |
     | other | unknown | `programTrap` |
 
-- **`static void doSys2(support_t *sup)`** — SYS2 TERMINATE
+- **`static void doSys2(support_t *sup)`** - SYS2 TERMINATE
   - Orderly termination of the calling U-proc. Delegates to `programTrap()`.
 
-- **`static void doSys4(support_t *sup, state_t *st)`** — SYS4 WRITETERMINAL
+- **`static void doSys4(support_t *sup, state_t *st)`** - SYS4 WRITETERMINAL
   - Writes `a2` characters from the buffer at virtual address `a1` to terminal
     0, under mutual exclusion on `termWrSem`. Rejects (via `programTrap`) any
     length outside `[0, MAXSTRLENG]` or any buffer that falls outside `kuseg`.
@@ -562,7 +562,7 @@ enabled.
   - Returns in `a0`: the number of characters written on success, or the
     negated low byte of the device status on error.
 
-- **`static void doSys5(support_t *sup, state_t *st)`** — SYS5 READTERMINAL
+- **`static void doSys5(support_t *sup, state_t *st)`** - SYS5 READTERMINAL
   - Reads characters one at a time from terminal 0 into the buffer at virtual
     address `a1`, under mutual exclusion on `termRdSem`. Stops at a newline
     (`'\n'`) or after `MAXSTRLENG` characters. Rejects (via `programTrap`) any
@@ -573,7 +573,7 @@ enabled.
   - Returns in `a0`: the number of characters read on success, or the negated
     low byte of the device status on error.
 
-- **`static void doSys6(support_t *sup, state_t *st)`** — SYS6 EXECUTE
+- **`static void doSys6(support_t *sup, state_t *st)`** - SYS6 EXECUTE
   - Spawns a new U-proc by ASID. Only the shell (ASID 1) may call this; every
     other caller is terminated via `programTrap`. The target ASID must be in
     `[2, UPROCMAX]`.
