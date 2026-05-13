@@ -10,6 +10,7 @@
 #include "../phase2/headers/syscalls.h"
  
 #include "headers/vmSupport.h"
+#include "headers/sysSupport.h"   /* programTrap */
 
 
 
@@ -153,6 +154,18 @@ void updateTLB() {
     TLBCLR();
 }
 
+/* Termina ordinatamente la U-proc corrente.
+ * holdsMutex == 1: il chiamante detiene swapPoolSem; lo rilasciamo prima.
+ * holdsMutex == 0: il chiamante non lo detiene.
+ * Recupera la support struct e delega a programTrap (sysSupport.c), che
+ * sveglia la sync sem giusta (masterSem/shellSem) e chiama SYS2 TERMPROCESS. */
+void programTrapKill(int holdsMutex) {
+    if (holdsMutex) {
+        SYSCALL(VERHOGEN, (unsigned int)&swapPoolSem, 0, 0);
+    }
+    support_t *sup = (support_t *)SYSCALL(GETSUPPORTPTR, 0, 0, 0);
+    programTrap(sup);
+}
 
 
 /* ==========================================================================
@@ -213,7 +226,7 @@ void pager(void)
          *         Must happen BEFORE writing to backing store (§5.3). */
         setSTATUS(getSTATUS() & ~MSTATUS_MIE_MASK);   /* disable ints */
         victimPte->pte_entryLO &= ~VALIDON;            /* V bit = 0    */
-        updateTLB(victimPte);
+        updateTLB();
         setSTATUS(getSTATUS() |  MSTATUS_MIE_MASK);   /* enable ints  */
  
         /* 8c: write the victim page to its flash backing store. */
@@ -259,7 +272,7 @@ void pager(void)
  
     setSTATUS(getSTATUS() & ~MSTATUS_MIE_MASK);
     pte->pte_entryLO = FRAME_ADDR(frameIndex) | DIRTYON | VALIDON;
-    updateTLB(pte);
+    updateTLB();
     setSTATUS(getSTATUS() |  MSTATUS_MIE_MASK);
  
     /* ------------------------------------------------------------------
