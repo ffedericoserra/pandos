@@ -26,6 +26,7 @@ static swap_t swapPool[POOLSIZE];
  * FIFO page-replacement pointer.
  * -------------------------------------------------------------------------- */
 static int nextFrame = 0;
+int swapPoolSem; /* mutex sulla Swap Pool table — inizializzato da initSwapStructs() */
 
 
 
@@ -107,6 +108,9 @@ void initPageTable(support_t *sup, int asid) {
 //Inizializzazione swap pool
 void initSwapPool() {
 
+    swapPoolSem = 1;  // Semaforo inizializzato a 1
+
+
     for (int i = 0; i < POOLSIZE; i++) {
 
         // Frame libero
@@ -117,8 +121,7 @@ void initSwapPool() {
         swapPool[i].sw_pte = NULL;
     }
 
-    // Semaforo già inizializzato a 1
-}
+   }
 
 
 //Seleziona il prossimo frame da usare/sostituire
@@ -196,8 +199,7 @@ void pager(void)
     /* ------------------------------------------------------------------
      * Step 6: pick the next Swap Pool frame (FIFO round-robin).
      * ------------------------------------------------------------------ */
-    int frameIndex = nextFrame;
-    nextFrame = (nextFrame + 1) % POOLSIZE;
+    int frameIndex = getFrameFIFO(); 
  
     /* ------------------------------------------------------------------
      * Steps 7-8: handle an occupied frame (evict the victim page).

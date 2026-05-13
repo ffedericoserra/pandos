@@ -77,7 +77,7 @@ static void initUprocState(state_t *st, int asid) {
 }
 
 void test(void) {
-    initSwapStructs();
+    initSwapPool();
 
     masterSem = 0;
     shellSem  = 0;
