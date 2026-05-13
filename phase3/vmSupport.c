@@ -26,12 +26,12 @@ swap_t swapPool[POOLSIZE];
  * FIFO page-replacement pointer.
  * -------------------------------------------------------------------------- */
 static int nextFrame = 0;
-int swapPoolSem; /* mutex sulla Swap Pool table — inizializzato da initSwapStructs() */
+int swapPoolSem; /* mutex on Swap Pool table — initialized by initSwapStructs() */
 
 
 
-// Viene chiamato quando la pagina è valida (V=1 nella page table), ma non è presente nel TLB.
-// Quindi basta ricaricare il TLB
+// Called when the page is valid (V=1 in the page table), but not present in the TLB.
+// Then just reload the TLB
 void uTLB_RefillHandler() {
 
     state_t *state = GET_EXCEPTION_STATE_PTR(0);
@@ -40,41 +40,39 @@ void uTLB_RefillHandler() {
 
     int vpn = entryHi >> VPNSHIFT;
 
-    //Recupero support struct del processo corrente
+    // Retrieve the support structure of the current process
     support_t *sup = currentProcess->p_supportStruct;
 
-    //Traduzione VPN -> indice page table
+    // Translate VPN into page table index
 
     int index;
 
     if (vpn >= 0x80000 && vpn <= 0x8001E) {
-        //pagine normali
+        //pages
         index = vpn - 0x80000;
     }
     else if (vpn == 0xBFFFF) {
-        //ultima pagina
+        //last page
         index = 31;
     }
     else {
         index = 0;
     }
 
-    //Recupero entry dalla page table
+    //Retrieve entry from page table
     pteEntry_t entry = sup->sup_privatePgTbl[index];
 
-    //Copia entryHI ed entryLO(VPN + ASID)
+    //Copy entryHI and entryLO(VPN + ASID)
     setENTRYHI(entry.pte_entryHI);
     setENTRYLO(entry.pte_entryLO);
 
-    //Scrittura nel TLB
+    //Writing in the TLB
     TLBWR();
     LDST(state);
 }
 
-
-
-//Inizializzazione page table
-//Crea la page table privata di un processo
+//Initialize page table
+//Create a process's private page table
 void initPageTable(support_t *sup, int asid) {
 
     for (int i = 0; i < USERPGTBLSIZE; i++) {
@@ -83,40 +81,40 @@ void initPageTable(support_t *sup, int asid) {
         unsigned int entryHI;
         unsigned int entryLO;
 
-        //calcolo vpn
+        //calculate vpn
         if (i < USERPGTBLSIZE - 1) {
-            //Pagine normali
+            //pages
             vpn = 0x80000 + i;
         } else {
-            //Ultima pagina = stack
+            //last page=stack
             vpn = 0xBFFFF;
         }
 
         entryHI = (vpn << VPNSHIFT) | (asid << ASIDSHIFT);
 
-        //PFN = 0 -> pagina non ancora caricata
-        //DIRTY = 1 -> scrivibile
-        //VALID = 0 -> non valida e causerà page fault
+        //PFN = 0 -> page not yet loaded
+        //DIRTY = 1 -> writable
+        //VALID = 0 -> not valid, will cause page fault
         entryLO = DIRTYON;
 
-        //Scrittura nella page table
+        //writing to th page table
         sup->sup_privatePgTbl[i].pte_entryHI = entryHI;
         sup->sup_privatePgTbl[i].pte_entryLO = entryLO;
     }
 }
 
-//Inizializzazione swap pool
+//Initialize swap pool
 void initSwapPool() {
 
-    swapPoolSem = 1;  // Semaforo inizializzato a 1
+    swapPoolSem = 1;  // Semaphore initialized to 1
 
 
     for (int i = 0; i < POOLSIZE; i++) {
 
-        // Frame libero
+        // free frame
         swapPool[i].sw_asid = -1;
 
-        // Valori di default (pulizia)
+        // default values
         swapPool[i].sw_pageNo = -1;
         swapPool[i].sw_pte = NULL;
     }
@@ -124,31 +122,30 @@ void initSwapPool() {
    }
 
 
-//Seleziona il prossimo frame da usare/sostituire
+//Select the next frame to use
 int getFrameFIFO() {
 
-    //Prende il frame corrente
+    //get the current frame
     int frame = nextFrame;
 
-    //Aggiorna indice
+    //update index
     nextFrame = (nextFrame + 1) % POOLSIZE;
 
     return frame;
 }
 
-
-//Disabilita interrupt
-//Necessario per operazioni atomiche su TLB / page table
+//Disable interrupt
+//Necessary for atomic operations on TLB / page table
 void disableInterrupts() {
     setSTATUS(getSTATUS() & ~MSTATUS_MIE_MASK);
 }
 
-//Abilita interrupt
+//enable interrupt
 void enableInterrupts() {
     setSTATUS(getSTATUS() | MSTATUS_MIE_MASK);
 }
 
-//Cancella tutte le entry del TLB
+// Invalidate all TLB entries
 void updateTLB() {
     TLBCLR();
 }
