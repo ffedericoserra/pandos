@@ -31,6 +31,7 @@ static void resetUprocResources(int asid);
  * here (rather than relying on vmSupport.h) so that this file does not depend
  * on the rest of the vmSupport interface. */
 extern int    swapPoolSem;
+extern swap_t swapPool[POOLSIZE];
 
 /*
  * supportGeneralHandler

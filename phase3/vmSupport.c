@@ -20,7 +20,7 @@ extern int    deviceSemaphores[];
  * Swap Pool table – one entry per Swap Pool frame.
  * sw_asid == -1  =>  frame is free.
  * -------------------------------------------------------------------------- */
-static swap_t swapPool[POOLSIZE];
+swap_t swapPool[POOLSIZE];
  
 /* --------------------------------------------------------------------------
  * FIFO page-replacement pointer.
