@@ -5,9 +5,9 @@
 .claude/
 CLAUDE.md
 
-# CMake build, term0, ds store
+# CMake build, ds store
 build/
-term0.uriscv
+*.uriscv
 .DS_Store
 
 # Prerequisites
