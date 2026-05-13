@@ -4,12 +4,7 @@
 #include "../../headers/types.h"
 #include "../../headers/const.h"
 
-/* -----------------------------------------------------------------------
- * Swap Pool starting physical address.
- * Placed after the first OSFRAMES (32) frames of RAM, i.e. after the OS.
- * RAMSTART = 0x20000000, OSFRAMES = 32, PAGESIZE = 4096
- * ----------------------------------------------------------------------- */
-#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))  /* 0x20020000 */
+/* SWAPPOOLSTART is defined in headers/const.h (included above). */
 
 /* Physical address of Swap Pool frame i */
 #define FRAME_ADDR(i) ((memaddr)(SWAPPOOLSTART + ((i) * PAGESIZE)))
@@ -27,9 +22,9 @@
  * Public functions
  * ----------------------------------------------------------------------- */
 
-/* Initialize Swap Pool table, Swap Pool semaphore, and device semaphores.
+/* Initialize Swap Pool table and Swap Pool semaphore.
  * Called by test/InstantiatorProcess in initProc.c. */
-void initSwapStructs(void);
+void initSwapPool(void);
 
 /* TLB-Refill event handler (Phase 3 replacement for the Phase 2 stub).
  * Declared here so exceptions.c can still export it via exceptions.h. */
