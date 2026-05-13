@@ -17,6 +17,10 @@
 extern pcb_t *currentProcess;
 extern int    deviceSemaphores[];
 
+/* Forward declarations for helpers defined later in this file. */
+static int flashIO(int asid, int pageNo, memaddr frameAddr, int op);
+int        getPageIndex(unsigned int entryHi);
+
 /* --------------------------------------------------------------------------
  * Swap Pool table – one entry per Swap Pool frame.
  * sw_asid == -1  =>  frame is free.
@@ -152,6 +156,20 @@ void enableInterrupts() {
 //Cancella tutte le entry del TLB
 void updateTLB() {
     TLBCLR();
+}
+
+/* Traduce entry_hi -> indice della page table (0..31).
+ * Stessa mappatura usata da uTLB_RefillHandler:
+ * VPN 0x80000..0x8001E -> slot 0..30 (text/data), VPN 0xBFFFF -> slot 31 (stack). */
+int getPageIndex(unsigned int entryHi) {
+    int vpn = entryHi >> VPNSHIFT;
+    if (vpn >= 0x80000 && vpn <= 0x8001E) {
+        return vpn - 0x80000;
+    } else if (vpn == 0xBFFFF) {
+        return 31;
+    } else {
+        return 0;
+    }
 }
 
 /* Termina ordinatamente la U-proc corrente.

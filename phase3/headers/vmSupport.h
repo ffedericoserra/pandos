@@ -4,12 +4,7 @@
 #include "../../headers/types.h"
 #include "../../headers/const.h"
 
-/* -----------------------------------------------------------------------
- * Swap Pool starting physical address.
- * Placed after the first OSFRAMES (32) frames of RAM, i.e. after the OS.
- * RAMSTART = 0x20000000, OSFRAMES = 32, PAGESIZE = 4096
- * ----------------------------------------------------------------------- */
-#define SWAPPOOLSTART (RAMSTART + (OSFRAMES * PAGESIZE))  /* 0x20020000 */
+/* SWAPPOOLSTART is defined in headers/const.h (included above). */
 
 /* Physical address of Swap Pool frame i */
 #define FRAME_ADDR(i) ((memaddr)(SWAPPOOLSTART + ((i) * PAGESIZE)))
