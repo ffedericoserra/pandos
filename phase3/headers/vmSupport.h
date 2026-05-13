@@ -22,9 +22,9 @@
  * Public functions
  * ----------------------------------------------------------------------- */
 
-/* Initialize Swap Pool table, Swap Pool semaphore, and device semaphores.
+/* Initialize Swap Pool table and Swap Pool semaphore.
  * Called by test/InstantiatorProcess in initProc.c. */
-void initSwapStructs(void);
+void initSwapPool(void);
 
 /* TLB-Refill event handler (Phase 3 replacement for the Phase 2 stub).
  * Declared here so exceptions.c can still export it via exceptions.h. */
