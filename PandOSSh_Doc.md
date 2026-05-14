@@ -495,29 +495,185 @@ The swap-pool table is declared in `phase3/vmSupport.c`:
 
 ### 5.2. Initialization (phase3/initProc.c)
 
-*This section is a placeholder. Full documentation will be added during the
-review of `phase3/initProc.c`.*
+This module owns the Phase 3 entry point and the storage for the shared
+support-level globals (Support structures, initial U-proc states,
+synchronisation and mutex semaphores). It runs once at boot, sets up
+everything the Pager and the Support-level handlers need, launches the shell
+U-proc, and then waits for it to terminate.
 
-The `test()` function is the Phase 3 entry point and replaces the Phase 2 test
-program. At boot it initialises the swap pool, all support-level semaphores,
-and the per-U-proc Support structures, then creates the shell U-proc (ASID 1)
-and waits on `masterSem` until the shell terminates. The other U-procs (ASIDs
-2..`UPROCMAX`) are launched on demand by the shell through `SYS6 EXECUTE`.
+**Key Functions:**
+
+- **`void test()`**
+  - Phase 3 entry point. Replaces the `test` function used by the Phase 2
+    standalone build. Performs the following steps in order:
+    1. Calls `initSwapPool()` (defined in `vmSupport.c`) to clear the swap
+       pool table and set `swapPoolSem` to 1.
+    2. Initialises the synchronisation semaphores: `masterSem = 0` and
+       `shellSem = 0`. Initialises the mutex semaphores: `termRdSem = 1`,
+       `termWrSem = 1`, and `flashSem[i] = 1` for `i` in `0..UPROCMAX-1`.
+    3. For every ASID `i` in `1..UPROCMAX`, calls `initSupport(&supports[i-1], i)`
+       and `initUprocState(&uprocStates[i-1], i)`. This builds eight
+       Support structures and eight initial processor states in advance,
+       even though only the shell is launched at boot.
+    4. Issues `SYS1 CREATEPROCESS` for ASID 1 (the shell), with priority
+       `PROCESS_PRIO_LOW` and the matching Support pointer.
+    5. Issues `SYS3 PASSEREN` on `masterSem` (initial value 0). Blocks
+       until the shell V's `masterSem` from `programTrap` (in
+       `sysSupport.c`) on exit.
+    6. Issues `SYS2 TERMPROCESS` to terminate itself. `processCount` drops
+       to 0 and the scheduler halts the machine.
+
+**Helper Functions:**
+
+- **`static void initPageTable(support_t *sup, int asid)`**
+  - Fills the 32 entries of `sup->sup_privatePgTbl`:
+    - Slots 0..30: `entry_hi` carries `VPN = 0x80000 + i` and the
+      U-proc's ASID. `entry_lo = DIRTYON` (D=1, V=0, G=0).
+    - Slot 31: `entry_hi` carries `VPN = 0xBFFFF` (the stack page). Same
+      `entry_lo = DIRTYON`.
+  - All entries start with V=0, so the first access to each page raises
+    a TLB-Invalid exception that the Pager handles.
+
+- **`static void initSupport(support_t *sup, int asid)`**
+  - Populates one Support structure:
+    - `sup_asid = asid`.
+    - Calls `initPageTable(sup, asid)` to fill the private page table.
+    - Sets `sup_exceptContext[PGFAULTEXCEPT]` so that when the Nucleus
+      passes up a TLB-Invalid exception for this U-proc, control jumps
+      to `pager` on the U-proc's `sup_stackTLB`, in kernel mode with
+      interrupts enabled.
+    - Sets `sup_exceptContext[GENERALEXCEPT]` similarly, but pointing at
+      `supportGeneralHandler` on `sup_stackGen`.
+
+- **`static void initUprocState(state_t *st, int asid)`**
+  - Builds the initial processor state for one U-proc:
+    - `entry_hi = asid << ASIDSHIFT` (carries the ASID for the TLB).
+    - `cause = 0`.
+    - `status = MSTATUS_MPP_U | MSTATUS_MPIE_MASK` so that the post-MRET
+      privilege drops to user mode with interrupts enabled.
+    - `pc_epc = reg_s9 = UPROCSTARTADDR` (`0x800000B0`, the entry point
+      baked into the flash images by `testers/Makefile`).
+    - `mie = MIE_ALL`.
+    - `reg_sp = USERSTACKTOP` (`0xC0000000`, top of kuseg).
+    - All other GPRs zeroed.
 
 ### 5.3. Virtual Memory Support (phase3/vmSupport.c)
 
-*This section is a placeholder. Full documentation will be added during the
-review of `phase3/vmSupport.c`.*
+This module owns the swap pool, the TLB-Refill handler, and the Pager. Its
+job is to keep U-proc pages flowing between flash devices (the persistent
+backing store) and the swap pool (a region of physical RAM shared by all
+U-procs).
 
-This module provides three pieces of functionality:
+**Module-local State:**
 
-- `uTLB_RefillHandler()` - runs on every TLB miss whose target PTE is already
-  valid. Copies the PTE into the TLB and resumes the U-proc.
-- `pager()` - runs on TLB-Invalid exceptions. Fetches the missing page from the
-  U-proc's flash device into a swap-pool frame, evicting another frame if
-  necessary. Serialises access to the swap pool with `swapPoolSem`.
-- `flashOp()` - wraps the flash device-register protocol for single-block read
-  and write operations.
+| Variable | Type | Description |
+|---|---|---|
+| `swapPool[POOLSIZE]` | `swap_t[]` | The swap pool table. One entry per swap-pool frame (16 frames). Each entry records `(ASID, page number, PTE pointer)` for the page currently held in that frame, or `sw_asid = -1` if the frame is free. |
+| `swapPoolSem` | `int` | Mutex for the swap pool table. Initial value 1. |
+| `nextFrame` | `static int` | Round-robin counter used by `getFrameFIFO()`. Starts at 0. |
+
+**Key Functions:**
+
+- **`void uTLB_RefillHandler()`**
+  - Runs from the BIOS pass-up vector on every TLB miss whose target PTE
+    is already valid (the page is resident). Executes on the Nucleus
+    stack with interrupts disabled; must complete quickly and cannot
+    block.
+  - Reads the saved exception state from `BIOSDATAPAGE`, extracts the
+    VPN from `entry_hi`, computes the page-table slot, retrieves the
+    PTE from `currentProcess->p_supportStruct->sup_privatePgTbl`, writes
+    it into the TLB via `setENTRYHI` + `setENTRYLO` + `TLBWR`, and
+    `LDST`s back to the saved state to retry the faulting instruction.
+
+- **`void initSwapPool()`**
+  - Initialises the swap pool table: marks every entry free
+    (`sw_asid = -1`, `sw_pageNo = -1`, `sw_pte = NULL`) and sets
+    `swapPoolSem = 1`. Called once by `test()` at boot.
+
+- **`void pager(void)`**
+  - The Pager. Entry point referenced by
+    `sup_exceptContext[PGFAULTEXCEPT].pc`. Runs on the U-proc's
+    `sup_stackTLB`, in kernel mode with interrupts enabled. Implements
+    the fourteen-step Phase 3 paging algorithm:
+    1. Recover the Support pointer via `SYS8 GETSUPPORTPTR`.
+    2. Read the saved exception state from
+       `sup->sup_exceptState[PGFAULTEXCEPT]` and extract the cause.
+    3. If the cause is `EXC_MOD` (TLB-Modification), call
+       `programTrapKill(0)` to terminate the U-proc. This should not
+       happen since every PTE has D=1 in this implementation.
+    4. P(`swapPoolSem`).
+    5. Compute the missing page index `p` via `getPageIndex(entry_hi)`.
+    6. Pick the next swap-pool frame `i` via `getFrameFIFO()`.
+    7-8. If frame `i` is occupied (`swapPool[i].sw_asid != -1`):
+         atomically (interrupts off) clear `V` on the previous owner's
+         PTE and flush the TLB, then write the frame back to the
+         previous owner's flash device via `flashIO(... FLASHWRITE)`.
+         On flash error, call `programTrapKill(1)`.
+    9. Read page `p` from the current U-proc's flash device into frame
+       `i` via `flashIO(... FLASHREAD)`. On flash error, call
+       `programTrapKill(1)`.
+    10. Update `swapPool[i]` with the new owner's `(asid, p, PTE pointer)`.
+    11-12. Atomically (interrupts off) set the PTE to
+           `frameAddr | DIRTYON | VALIDON` and flush the TLB.
+    13. V(`swapPoolSem`).
+    14. `LDST` back to the saved exception state to retry the faulting
+        instruction.
+
+- **`void programTrapKill(int holdsMutex)`**
+  - Orderly U-proc termination path used by the Pager on flash errors
+    and on TLB-Modification.
+    - If `holdsMutex == 1`, V's `swapPoolSem` first so the Pager does
+      not leak it.
+    - Recovers the Support pointer via `SYS8 GETSUPPORTPTR` and
+      delegates to `programTrap(sup)` (in `sysSupport.c`), which V's
+      the right synchronisation semaphore (`masterSem` for the shell,
+      `shellSem` for any other U-proc) and asks the Nucleus to
+      terminate the process via `SYS2 TERMPROCESS`.
+
+**Helper Functions:**
+
+- **`int getFrameFIFO()`**
+  - Returns the current value of `nextFrame`, then advances it modulo
+    `POOLSIZE`. Pure round-robin: no preference for free frames over
+    occupied ones.
+
+- **`int getPageIndex(unsigned int entryHi)`**
+  - Maps `entry_hi` to a page-table slot in `0..31`:
+    - VPN `0x80000..0x8001E` (text/data) → slots 0..30.
+    - VPN `0xBFFFF` (stack) → slot 31.
+    - Anything else → slot 0.
+  - Used by `pager()`. `uTLB_RefillHandler` inlines the same logic.
+
+- **`void updateTLB()`**
+  - Calls `TLBCLR()` to invalidate the entire TLB. Used by `pager()` to
+    drop stale TLB entries after a PTE change. The current
+    implementation flushes the whole TLB, even though only one entry
+    needs to change.
+
+- **`void disableInterrupts()` / `void enableInterrupts()`**
+  - Toggle the `MIE` bit in `mstatus` to disable or re-enable maskable
+    interrupts on the local CPU. The Pager uses these (currently inline
+    rather than through these helpers) to make a PTE update and the
+    surrounding TLB flush atomic with respect to interrupts.
+
+- **`void initPageTable(support_t *sup, int asid)`**
+  - Alternate page-table initialiser. Currently unused: the equivalent
+    initialisation is done by the static `initPageTable` in
+    `initProc.c`, called from `initSupport()`.
+
+- **`static int flashIO(int asid, int pageNo, memaddr frameAddr, int op)`**
+  - Performs a single 4 KiB flash transfer (read or write):
+    1. Computes the flash device register address:
+       `START_DEVREG + (FLASH_LINE - 3) * 0x80 + (asid - 1) * 0x10`.
+    2. Writes `frameAddr` into the device's `data0` register.
+    3. P(`flashSem[asid - 1]`) to serialise access to this flash
+       device.
+    4. Issues `SYS5 DOIO` with the command word `(pageNo << 8) | op`
+       (where `op` is `FLASHREAD` or `FLASHWRITE`). DOIO blocks the
+       U-proc until the device-completion interrupt fires, then
+       returns the device status.
+    5. V(`flashSem[asid - 1]`).
+    6. Returns the device status (`FLASH_STATUS_OK = 1` on success).
 
 ### 5.4. Support-Level Exception Handler (phase3/sysSupport.c)
 
@@ -611,6 +767,81 @@ enabled.
     the Pager could later see a frame still marked as belonging to a previous
     incarnation of `asid` and write the new process's memory back over the
     previous incarnation's flash image.
+
+### 5.5. Shell and Calculator (testers/shell.c, testers/calc.c)
+
+These are the two user programs we wrote ourselves. They run in user mode as
+ordinary U-procs, talk to the kernel only through SYSCALLs, and use the
+shared `print()` helper from `testers/print.c` for output.
+
+#### Shell (`testers/shell.c`, ASID 1)
+
+The shell is the only U-proc the kernel launches at boot. Its job is to read
+command names from terminal 0 and spawn the matching tester via `SYS6
+EXECUTE`.
+
+- Holds a static `(name, ASID)` table that mirrors the flash layout in
+  `phase3_config_machine.json`:
+
+  | Name        | ASID | Flash slot |
+  |---|---|---|
+  | `fibEight`  | 2 | flash1 |
+  | `echo`      | 3 | flash2 |
+  | `fibEleven` | 4 | flash3 |
+  | `uname`     | 5 | flash4 |
+  | `date`      | 6 | flash5 |
+  | `sl`        | 7 | flash6 |
+  | `calc`      | 8 | flash7 |
+
+- Main loop:
+  1. Prints `$ ` on terminal 0 with `SYS4 WRITETERMINAL`.
+  2. Reads one line into a 32-byte buffer with `SYS5 READTERMINAL`. The
+     read returns when the user presses Enter (the trailing newline is
+     stripped before the comparison) or when 128 characters have been
+     received.
+  3. If the line is empty, loops.
+  4. If the line is `exit`, breaks out of the loop.
+  5. Otherwise, walks the `(name, ASID)` table. If the name is unknown,
+     prints `command not found` and loops. If it is known, issues
+     `SYS6 EXECUTE asid`. The shell blocks inside this SYSCALL until the
+     child U-proc terminates, then resumes and prints the next prompt.
+- On `exit`, prints `bye` and issues `SYS2 TERMINATE`. `programTrap` (in
+  `sysSupport.c`) sees that the dying U-proc is the shell (`sup_asid == 1`),
+  V's `masterSem` so that `InstantiatorProcess` wakes, and asks the Nucleus
+  to terminate the shell. With both processes gone, `processCount` drops to
+  0 and the kernel halts.
+
+The shell uses a small inline `streq()` to compare strings because the
+testers do not link against libc.
+
+#### Calculator (`testers/calc.c`, ASID 8)
+
+`calc` is a one-shot single-digit calculator. The shell spawns it on the
+`calc` command; once it has printed a result it terminates and the shell
+gets the prompt back.
+
+- Prints `calc> ` on terminal 0 with `SYS4 WRITETERMINAL`.
+- Reads one line (up to 16 characters) with `SYS5 READTERMINAL`.
+- Expects exactly the format `<digit><op><digit>` (three characters):
+  - `digit` must be `'0'..'9'`.
+  - `op` must be one of `+`, `-`, `*`, `/`.
+- Validates the input and prints an error message on failure:
+  - Fewer than 3 characters → `format: <digit><op><digit>`
+  - Operand outside `0..9` → `operands must be single digits`
+  - Operator not in `+ - * /` → `operator must be + - * /`
+  - `b == 0` for division → `division by zero`
+- On valid input, computes the result and prints it as a decimal number,
+  including a leading minus sign for negative results. The print routine
+  (`printSigned`) builds the digit string by hand because there is no
+  `printf` available.
+- Issues `SYS2 TERMINATE` after printing (whether the run succeeded or
+  ended on an error). `programTrap` sees that the dying U-proc is not the
+  shell, V's `shellSem` so that the shell unblocks from its `SYS6
+  EXECUTE`, and asks the Nucleus to terminate the calculator.
+
+Only the first three characters of the input line are read by `calc`, so
+input longer than three characters (e.g. `12+3`) is silently truncated and
+interpreted as `1+3`.
 
 ## 6. Emulator Configuration Notes
 
