@@ -154,8 +154,8 @@ void updateTLB() {
     TLBCLR();
 }
 
-/* Traduce entry_hi -> indice della page table (0..31).
- * Stessa mappatura usata da uTLB_RefillHandler:
+/* Translate entry_hi -> table page index (0..31).
+ * Same mapping used by uTLB_RefillHandler:
  * VPN 0x80000..0x8001E -> slot 0..30 (text/data), VPN 0xBFFFF -> slot 31 (stack). */
 int getPageIndex(unsigned int entryHi) {
     int vpn = entryHi >> VPNSHIFT;
@@ -168,11 +168,11 @@ int getPageIndex(unsigned int entryHi) {
     }
 }
 
-/* Termina ordinatamente la U-proc corrente.
- * holdsMutex == 1: il chiamante detiene swapPoolSem; lo rilasciamo prima.
- * holdsMutex == 0: il chiamante non lo detiene.
- * Recupera la support struct e delega a programTrap (sysSupport.c), che
- * sveglia la sync sem giusta (masterSem/shellSem) e chiama SYS2 TERMPROCESS. */
+/* Terminates the current U-proc neatly.
+ * holdsMutex == 1: The caller holds swapPoolSem; we release it first
+ * holdsMutex == 0: The caller does not hold it.
+ * Retrieve the support struct and delegate to programTrap (sysSupport.c), which
+* wakes up the appropriate sync sem (masterSem/shellSem) and calls SYS2 TERMPROCESS.
 void programTrapKill(int holdsMutex) {
     if (holdsMutex) {
         SYSCALL(VERHOGEN, (unsigned int)&swapPoolSem, 0, 0);
