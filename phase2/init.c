@@ -61,11 +61,6 @@ int main() {
     /* Enable interrupt and kernel mode */
     pcb->p_s.status = MSTATUS_MPIE_MASK | MSTATUS_MPP_M;
 
-    /* Initialize remaining PCB fields */
-    pcb->p_time = 0;
-    pcb->p_semAdd = NULL;
-    pcb->p_supportStruct = NULL;
-
     /* Place on Ready Queue and increment Process Count */
     rootProcess = pcb;
     insertProcQ(&readyQueue, pcb);
