@@ -75,37 +75,6 @@ void uTLB_RefillHandler() {
     LDST(state);
 }
 
-//Initialize page table
-//Create a process's private page table
-void initPageTable(support_t *sup, int asid) {
-
-    for (int i = 0; i < USERPGTBLSIZE; i++) {
-
-        unsigned int vpn;
-        unsigned int entryHI;
-        unsigned int entryLO;
-
-        //calculate vpn
-        if (i < USERPGTBLSIZE - 1) {
-            //pages
-            vpn = 0x80000 + i;
-        } else {
-            //last page=stack
-            vpn = 0xBFFFF;
-        }
-
-        entryHI = (vpn << VPNSHIFT) | (asid << ASIDSHIFT);
-
-        //PFN = 0 -> page not yet loaded
-        //DIRTY = 1 -> writable
-        //VALID = 0 -> not valid, will cause page fault
-        entryLO = DIRTYON;
-
-        //writing to th page table
-        sup->sup_privatePgTbl[i].pte_entryHI = entryHI;
-        sup->sup_privatePgTbl[i].pte_entryLO = entryLO;
-    }
-}
 
 //Initialize swap pool
 void initSwapPool() {
@@ -172,7 +141,7 @@ int getPageIndex(unsigned int entryHi) {
  * holdsMutex == 1: The caller holds swapPoolSem; we release it first
  * holdsMutex == 0: The caller does not hold it.
  * Retrieve the support struct and delegate to programTrap (sysSupport.c), which
-* wakes up the appropriate sync sem (masterSem/shellSem) and calls SYS2 TERMPROCESS.
+* wakes up the appropriate sync sem (masterSem/shellSem) and calls SYS2 TERMPROCESS.*/
 void programTrapKill(int holdsMutex) {
     if (holdsMutex) {
         SYSCALL(VERHOGEN, (unsigned int)&swapPoolSem, 0, 0);
