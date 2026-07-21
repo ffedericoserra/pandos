@@ -656,11 +656,6 @@ U-procs).
     rather than through these helpers) to make a PTE update and the
     surrounding TLB flush atomic with respect to interrupts.
 
-- **`void initPageTable(support_t *sup, int asid)`**
-  - Alternate page-table initialiser. Currently unused: the equivalent
-    initialisation is done by the static `initPageTable` in
-    `initProc.c`, called from `initSupport()`.
-
 - **`static int flashIO(int asid, int pageNo, memaddr frameAddr, int op)`**
   - Performs a single 4 KiB flash transfer (read or write):
     1. Computes the flash device register address:
